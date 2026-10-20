@@ -3,7 +3,7 @@ conf_thresh: 0.4
 max_reproj_px: 3.0
 ema_alpha: 0.3
 forget_s: 2.0
-speed_cap: 2.0
+speed_cap: 1.5
 approach_offset: 1.5
 commit_dist: 1.0
 exit_dist: 0.8

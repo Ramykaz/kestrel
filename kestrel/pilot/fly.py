@@ -13,7 +13,7 @@ import pybullet as p
 
 from kestrel.perception.detect import Detection, GateDetector
 from kestrel.perception.pose import estimate_gate
-from kestrel.perception.tracker import GateTracker
+from kestrel.perception.tracker import MATCH_RADIUS_M, GateTracker
 from kestrel.pilot.controller import (
     LowLevelController,
     OwnState,
@@ -31,6 +31,9 @@ ALIGN_RADIUS_M = 0.15
 EXIT_RADIUS_M = 0.4
 # A gate is a candidate target only while the drone is this far in front of its plane.
 FRONT_MARGIN_M = 0.3
+# Target choice cost: metres of distance plus this many metres per radian of turn. Courses put
+# the next gate roughly ahead of the last one's exit, but the pilot is not told the order.
+TURN_COST_M_PER_RAD = 4.0
 
 
 def yaw_of(quat: np.ndarray) -> float:
@@ -55,6 +58,10 @@ class CameraPilot:
         self.aligned = False
         self.commit_center = np.zeros(3)
         self.commit_forward = np.zeros(3)
+        # Gates flown through, oldest first. Tracker estimates expire when out of view, so a
+        # passed gate seen again later would otherwise look new and get flown twice.
+        self.passed_centers: list[np.ndarray] = []
+        self.search_s = 0.0
         self.search_anchor = np.array([own.pos[0], own.pos[1], SEARCH_HEIGHT_M])
         self.goal = self.search_anchor.copy()
 
@@ -78,22 +85,41 @@ class CameraPilot:
         self.tracker.update(observations, time_s, keep_id=self.target_id)
         return detections
 
+    def _pass_rank(self, center: np.ndarray) -> int | None:
+        """Position of a gate in the passed list (0 is the oldest), or None if never passed."""
+        for rank, passed in enumerate(self.passed_centers):
+            if np.linalg.norm(center - passed) <= MATCH_RADIUS_M:
+                return rank
+        return None
+
+    def _choice_cost(self, center: np.ndarray, pos: np.ndarray) -> float:
+        offset = center - pos
+        turn = abs(math.remainder(math.atan2(offset[1], offset[0]) - self.yaw, math.tau))
+        return float(np.linalg.norm(offset)) + TURN_COST_M_PER_RAD * turn
+
     def _pick_target(self, pos: np.ndarray) -> None:
-        candidates = [
+        in_front = [
             h
             for h in self.tracker.hypotheses
-            if h.confirmed
-            and not h.passed
-            and float(np.dot(pos - h.center, h.forward)) < -FRONT_MARGIN_M
+            if h.confirmed and float(np.dot(pos - h.center, h.forward)) < -FRONT_MARGIN_M
         ]
-        if not candidates:
+        fresh = [h for h in in_front if not h.passed and self._pass_rank(h.center) is None]
+        full_turn_s = math.tau / self.params.search_yaw_rate
+        if fresh:
+            choice = min(fresh, key=lambda h: self._choice_cost(h.center, pos))
+        elif in_front and self.search_s >= full_turn_s:
+            # A full search turn found nothing new. Gates only count in course order, so a
+            # gate flown out of order earlier may still be needed: fly the oldest pass again.
+            choice = min(in_front, key=lambda h: self._pass_rank(h.center) or 0)
+        else:
             if self.state is not PilotState.SEARCH:
                 self.state = PilotState.SEARCH
+                self.search_s = 0.0
                 self.search_anchor = np.array([*self.reference.pos[:2], SEARCH_HEIGHT_M])
             return
-        nearest = min(candidates, key=lambda h: float(np.linalg.norm(h.center - pos)))
-        self.target_id = nearest.id
+        self.target_id = choice.id
         self.aligned = False
+        self.search_s = 0.0
         self.state = PilotState.APPROACH
 
     def _commit(self, center: np.ndarray, forward: np.ndarray) -> None:
@@ -118,6 +144,10 @@ class CameraPilot:
             target = self.tracker.get(self.target_id)
             if target is not None:
                 target.passed = True
+            rank = self._pass_rank(self.commit_center)
+            if rank is not None:
+                del self.passed_centers[rank]
+            self.passed_centers.append(self.commit_center.copy())
             self.state = PilotState.EXIT
         if self.state is PilotState.EXIT:
             exit_point = self.commit_center + self.commit_forward * self.params.exit_dist
@@ -134,6 +164,7 @@ class CameraPilot:
             self.goal = self.search_anchor
             self.reference.advance(self.goal, SEARCH_CLIMB_SPEED_M_S, True, dt)
             self.yaw += params.search_yaw_rate * dt
+            self.search_s += dt
         elif self.state is PilotState.APPROACH:
             target = self.tracker.get(self.target_id)
             assert target is not None
