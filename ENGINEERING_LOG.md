@@ -119,3 +119,19 @@ While trying lighting options, a render with only `shadow=1` came out as dark as
 ## 2026-10-20: A seam every 2 m on the voronoi ground
 
 The ground mesh repeats its texture every 2 m, so every texture must tile. A test that compares the wrap-around step with the largest step inside the tile failed only for the voronoi pattern, with a step of 97.6 against at most 6.4 inside. The tiled seed array is laid out seed by seed over 9 offsets, and I took the seed as `index % 12` instead of `index // 9`, so copies of one cell in neighboring tiles got different shades. The first version of that test compared against the mean step and also failed on checker, tiles, stripes and concrete, whose hard edges sit on the tile border by design.
+
+## 2026-10-20: Ultralytics ignored the epoch count
+
+A 2 epoch CPU training test ran 15 epochs. With `time` set, the ultralytics trainer re-plans `epochs` after the first epoch to fill the time budget, so the preset's `epochs` was silently ignored. `train_detector` no longer passes `time`; a callback on `on_fit_epoch_end` sets `trainer.stop` once the GPU minute budget has passed. A rerun stopped after exactly 2 epochs.
+
+## 2026-10-20: Checking the ONNX decoder against ultralytics
+
+I compared my ONNX decoding with ultralytics' own predictions on 20 validation frames. At first only 133 of 174 detections matched, with keypoints up to 9.9 px apart, but ultralytics was using per-class NMS at IoU 0.7. With the same NMS (class-agnostic, IoU 0.5), all 120 detections matched and keypoints agreed exactly, which confirms the letterbox and half-pixel handling. Boxes still differed by up to 14.4 px because ultralytics clips boxes to the image. Training labels are clipped too, so the decoder now clips, and the boxes then agreed exactly as well.
+
+## 2026-10-20: 2 m/s is too fast for tech turns
+
+With a detector that reports true corners, the camera pilot crashed on all 8 tech training courses at 2 m/s, every time into the frame of the gate it was aiming at. In the gate's frame, the drone reached the approach point still sliding sideways at about 1.6 m/s and ended 0.5 m off center, against a 0.3 m half opening. The reference autopilot crashed on the same 4 courses at 2 m/s and finished all 4 at 1.5 m/s, so the limit is the smoothed reference plus DSLPIDControl, not the camera pilot. The base pilot preset now flies at 1.5 m/s.
+
+## 2026-10-20: The pilot flew the course twice
+
+One flight timed out after passing 4 gates, then flying gates 0 to 3 again. The passed flag lived on the tracker's gate estimate, and estimates expire `forget_s` after leaving view, so gate 0 seen again later looked new. The pilot now keeps its own list of gates it flew through. That exposed a second problem on a looping course: right after gate 0, the pilot flew through the last gate, which sits next to it. The simulator only counts gates in order, and the pilot then refused to fly that gate again at the end. The pilot is not told the order, so the fix had to stay within what it knows. It now scores candidates by distance plus 4 m per radian of turn, and after a full search turn with nothing new, it flies the oldest passed gate again. I also tried deferring costly choices until after a search turn; that finished 16 of 20 instead of 19 of 20, so I reverted it. With true corners, the pilot finishes 27 of 30 tech training courses, median 28.9 s.
