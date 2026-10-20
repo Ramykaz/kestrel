@@ -101,3 +101,13 @@ What fixed it: nothing in the renderer needed fixing. The player did get one rea
 ## 2026-10-20: EGL plugin killed pytest in CI
 
 The first GitHub Actions run stopped after 26 tests with exit code 1 and no pytest summary. Test 27 is the EGL projection test. On a runner with no EGL display, PyBullet's EGL plugin prints "failed to EGL with glad." and calls exit() inside C, so the fallback to TinyRenderer and the test's skip never ran. I reproduced it in WSL by pointing `__EGL_VENDOR_LIBRARY_FILENAMES` at a missing file. `World` now loads the plugin only after a child process has loaded it and printed a success line. The exit status alone was not enough, because one local run of the crashing load returned 0. CI also installs Mesa's software EGL, so the EGL test runs there instead of skipping.
+
+## 2026-10-20: vLLM on a Kaggle T4
+
+vLLM 0.10.1.1 serves `SmolVLM-256M-Instruct` in fp16 on a Kaggle T4, after three fixes found in `notebooks/kaggle_vllm_check.ipynb`.
+
+- The pip install found no matching version. The Kaggle kernel runs Python 3.13 and vLLM 0.10.1.1 requires 3.12 or older, so vLLM now gets its own Python 3.12 environment made with `uv`.
+- The server exited with code 1. Its log showed `GPT2Tokenizer has no attribute all_special_tokens_extended`: vLLM does not cap transformers, the install pulled transformers 5.20.2, and transformers 5 removed that attribute. Pinning `transformers<5` installed 4.57.6.
+- The first chat request got a body that was not JSON. It used an image URL on Wikimedia that vLLM fetches itself; I did not capture that response, so the cause is not confirmed. A 320x240 PNG sent inline as a data URL worked.
+
+On the T4, vLLM fell back to its V0 engine ("Compute Capability < 8.0 is not supported by the V1 Engine") and to the XFormers attention backend, since FlashAttention-2 does not support Turing. The model loaded in 3.8 s using 0.49 GiB, and the server was healthy 46 s after launch, including 19 s of CUDA graph capture. One request with the inline image (877 prompt tokens, 9 completion tokens) took 2.10 s and answered "In the image there is a square." vLLM stays optional; llama.cpp remains the serving path the spec plans around.
