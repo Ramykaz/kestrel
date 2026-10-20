@@ -1,7 +1,8 @@
-# Detector training preset for round 0.
+# Detector training preset for round 0. A T4 runs about 28 s per epoch on 8k frames at 320,
+# so 40 epochs finish inside the cap with the learning rate schedule complete.
 base_weights: yolo11n-pose.pt
-epochs: 150
-gpu_minutes: 20
+epochs: 40
+gpu_minutes: 22
 imgsz: 320
 batch: 64
 freeze: 0
