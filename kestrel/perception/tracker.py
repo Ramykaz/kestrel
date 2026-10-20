@@ -12,6 +12,9 @@ from kestrel.perception.pose import GateObservation
 MATCH_RADIUS_M = 0.8
 # A gate counts as confirmed after this many observations.
 CONFIRM_HITS = 3
+# PnP on a gate a few pixels tall pins down its position but hardly its facing direction, so
+# observations farther than this update the direction with weight falling as 1 / distance^2.
+FORWARD_TRUST_M = 2.5
 
 
 @dataclass
@@ -56,7 +59,8 @@ class GateTracker:
                 continue
             a = self.ema_alpha
             match.center = (1 - a) * match.center + a * observation.center
-            forward = (1 - a) * match.forward + a * observation.forward
+            b = a * min(1.0, (FORWARD_TRUST_M / observation.distance_m) ** 2)
+            forward = (1 - b) * match.forward + b * observation.forward
             match.forward = forward / max(np.linalg.norm(forward), 1e-9)
             match.hits += 1
             match.last_seen_s = time_s

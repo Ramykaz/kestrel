@@ -13,7 +13,7 @@ from kestrel.perception.detect import (
     non_max_suppression,
 )
 from kestrel.perception.pose import GATE_INNER_SIZE_M, GateObservation, estimate_gate
-from kestrel.perception.tracker import CONFIRM_HITS, GateTracker
+from kestrel.perception.tracker import CONFIRM_HITS, FORWARD_TRUST_M, GateTracker
 from kestrel.pilot.params import PilotParams, load_pilot_preset
 from kestrel.sim.camera import (
     camera_view_matrix,
@@ -129,8 +129,8 @@ def test_nms_keeps_separate_boxes():
     assert non_max_suppression(boxes, np.array([0.9, 0.8, 0.7]), 0.5) == [0, 2]
 
 
-def _observation(center, forward=(1.0, 0.0, 0.0)):
-    return GateObservation(np.array(center, float), np.array(forward, float), True, 0.5, 3.0)
+def _observation(center, forward=(1.0, 0.0, 0.0), distance=2.0):
+    return GateObservation(np.array(center, float), np.array(forward, float), True, 0.5, distance)
 
 
 def test_tracker_averages_matches_and_forgets_unseen_gates():
@@ -156,3 +156,15 @@ def test_pilot_params_enforce_bounds():
     raw = params.to_dict() | {"speed_cap": 5.0}
     with pytest.raises(ValueError, match="speed_cap"):
         PilotParams(**raw)
+
+
+def test_far_observations_barely_turn_a_gate_estimate():
+    tracker = GateTracker(ema_alpha=0.5, forget_s=5.0)
+    tracker.update([_observation([0, 0, 1])], 0.0, keep_id=None)
+    sideways = (0.0, 1.0, 0.0)
+    tracker.update([_observation([0, 0, 1], sideways, distance=4 * FORWARD_TRUST_M)], 0.1, None)
+    far_turn = np.degrees(np.arctan2(*tracker.hypotheses[0].forward[1::-1]))
+    tracker.update([_observation([0, 0, 1], sideways, distance=FORWARD_TRUST_M)], 0.2, None)
+    near_turn = np.degrees(np.arctan2(*tracker.hypotheses[0].forward[1::-1]))
+    assert far_turn < 3.0
+    assert near_turn - far_turn > 20.0
