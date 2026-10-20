@@ -61,6 +61,26 @@ def world_to_camera(points_world: np.ndarray, view_matrix: tuple[float, ...]) ->
     return gl * np.array([1.0, -1.0, -1.0])
 
 
+def camera_to_world(points_cam: np.ndarray, view_matrix: tuple[float, ...]) -> np.ndarray:
+    """Inverse of world_to_camera for Nx3 points."""
+    view = np.array(view_matrix).reshape(4, 4, order="F")
+    gl = points_cam * np.array([1.0, -1.0, -1.0])
+    return (gl - view[:3, 3]) @ view[:3, :3]
+
+
+def camera_view_matrix(drone_pos: np.ndarray, drone_quat: np.ndarray) -> tuple[float, ...]:
+    """OpenGL view matrix of the onboard camera for a drone pose (quaternion x, y, z, w)."""
+    pitch = math.radians(PITCH_UP_DEG)
+    body_to_world = np.array(p.getMatrixFromQuaternion(list(drone_quat))).reshape(3, 3)
+    forward = body_to_world @ np.array([math.cos(pitch), 0.0, math.sin(pitch)])
+    up = body_to_world @ np.array([-math.sin(pitch), 0.0, math.cos(pitch)])
+    return p.computeViewMatrix(
+        cameraEyePosition=list(drone_pos),
+        cameraTargetPosition=list(drone_pos + forward),
+        cameraUpVector=list(up),
+    )
+
+
 def project_camera_points(points_cam: np.ndarray, intrinsics: Intrinsics) -> np.ndarray:
     """Project Nx3 camera points with positive depth to Nx2 pixel coordinates."""
     z = points_cam[:, 2]
@@ -88,23 +108,13 @@ class OnboardCamera:
         self.projection_matrix = p.computeProjectionMatrixFOV(
             fov=vfov_deg, aspect=WIDTH / HEIGHT, nearVal=NEAR_M, farVal=FAR_M
         )
-        pitch = math.radians(PITCH_UP_DEG)
-        self._forward_body = np.array([math.cos(pitch), 0.0, math.sin(pitch)])
-        self._up_body = np.array([-math.sin(pitch), 0.0, math.cos(pitch)])
         k = self.intrinsics
         v, u = np.mgrid[0:HEIGHT, 0:WIDTH].astype(float)
         rays = np.stack([(u - k.cx) / k.fx, (v - k.cy) / k.fy, np.ones_like(u)], axis=-1)
         self._pixel_rays = rays / np.linalg.norm(rays, axis=-1, keepdims=True)
 
     def view_matrix(self, drone_pos: np.ndarray, drone_quat: np.ndarray) -> tuple[float, ...]:
-        body_to_world = np.array(p.getMatrixFromQuaternion(drone_quat.tolist())).reshape(3, 3)
-        forward = body_to_world @ self._forward_body
-        up = body_to_world @ self._up_body
-        return p.computeViewMatrix(
-            cameraEyePosition=drone_pos.tolist(),
-            cameraTargetPosition=(drone_pos + forward).tolist(),
-            cameraUpVector=up.tolist(),
-        )
+        return camera_view_matrix(drone_pos, drone_quat)
 
     def render(
         self,
