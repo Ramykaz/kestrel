@@ -39,9 +39,32 @@ class Intrinsics:
         }
 
 
-def onboard_intrinsics() -> Intrinsics:
+def onboard_intrinsics(renderer: int) -> Intrinsics:
+    """Pinhole intrinsics of the rendered image in the OpenCV convention: the top left pixel
+    center is (0, 0). The principal point depends on the renderer."""
     focal_px = (WIDTH / 2) / math.tan(math.radians(HFOV_DEG) / 2)
-    return Intrinsics(WIDTH, HEIGHT, focal_px, focal_px, WIDTH / 2, HEIGHT / 2)
+    if renderer == p.ER_TINY_RENDERER:
+        # TinyRenderer samples pixel i at viewport coordinate i instead of i + 0.5, then flips
+        # rows, which shifts its image by (+0.5, -0.5) px against an ideal pinhole camera.
+        # Measured in tests/test_label_projection.py; EGL shows no offset.
+        return Intrinsics(WIDTH, HEIGHT, focal_px, focal_px, WIDTH / 2, HEIGHT / 2 - 1)
+    return Intrinsics(WIDTH, HEIGHT, focal_px, focal_px, WIDTH / 2 - 0.5, HEIGHT / 2 - 0.5)
+
+
+def world_to_camera(points_world: np.ndarray, view_matrix: tuple[float, ...]) -> np.ndarray:
+    """Transform Nx3 world points to OpenCV camera coordinates (x right, y down, z forward)."""
+    view = np.array(view_matrix).reshape(4, 4, order="F")
+    homogeneous = np.c_[points_world, np.ones(len(points_world))]
+    gl = (view @ homogeneous.T).T[:, :3]
+    return gl * np.array([1.0, -1.0, -1.0])
+
+
+def project_camera_points(points_cam: np.ndarray, intrinsics: Intrinsics) -> np.ndarray:
+    """Project Nx3 camera points with positive depth to Nx2 pixel coordinates."""
+    z = points_cam[:, 2]
+    u = intrinsics.fx * points_cam[:, 0] / z + intrinsics.cx
+    v = intrinsics.fy * points_cam[:, 1] / z + intrinsics.cy
+    return np.c_[u, v]
 
 
 @dataclass(frozen=True)
@@ -49,6 +72,7 @@ class CameraFrame:
     rgb: np.ndarray
     view_matrix: tuple[float, ...]
     projection_matrix: tuple[float, ...]
+    segmentation: np.ndarray | None = None
 
 
 class OnboardCamera:
@@ -57,7 +81,7 @@ class OnboardCamera:
     def __init__(self, client: int, renderer: int) -> None:
         self.client = client
         self.renderer = renderer
-        self.intrinsics = onboard_intrinsics()
+        self.intrinsics = onboard_intrinsics(renderer)
         vfov_deg = math.degrees(2 * math.atan((HEIGHT / 2) / self.intrinsics.fy))
         self.projection_matrix = p.computeProjectionMatrixFOV(
             fov=vfov_deg, aspect=WIDTH / HEIGHT, nearVal=NEAR_M, farVal=FAR_M
@@ -76,16 +100,21 @@ class OnboardCamera:
             cameraUpVector=up.tolist(),
         )
 
-    def render(self, drone_pos: np.ndarray, drone_quat: np.ndarray) -> CameraFrame:
+    def render(
+        self, drone_pos: np.ndarray, drone_quat: np.ndarray, segmentation: bool = False
+    ) -> CameraFrame:
+        """Render the onboard view. With segmentation, also return per-pixel body ids
+        (-1 for background)."""
         view = self.view_matrix(drone_pos, drone_quat)
-        _, _, rgba, _, _ = p.getCameraImage(
+        _, _, rgba, _, seg = p.getCameraImage(
             WIDTH,
             HEIGHT,
             viewMatrix=view,
             projectionMatrix=self.projection_matrix,
             renderer=self.renderer,
-            flags=p.ER_NO_SEGMENTATION_MASK,
+            flags=0 if segmentation else p.ER_NO_SEGMENTATION_MASK,
             physicsClientId=self.client,
         )
         rgb = np.asarray(rgba, dtype=np.uint8).reshape(HEIGHT, WIDTH, 4)[:, :, :3]
-        return CameraFrame(rgb, view, self.projection_matrix)
+        seg_mask = np.asarray(seg, dtype=np.int32).reshape(HEIGHT, WIDTH) if segmentation else None
+        return CameraFrame(rgb, view, self.projection_matrix, seg_mask)

@@ -9,10 +9,12 @@ from kestrel.sim.world import World
 
 
 def test_intrinsics_match_90_degree_horizontal_fov():
-    intrinsics = onboard_intrinsics()
-    assert math.isclose(intrinsics.fx, 160.0)
-    assert math.isclose(intrinsics.fy, intrinsics.fx)
-    assert (intrinsics.cx, intrinsics.cy) == (160.0, 120.0)
+    for renderer in (p.ER_TINY_RENDERER, p.ER_BULLET_HARDWARE_OPENGL):
+        intrinsics = onboard_intrinsics(renderer)
+        assert math.isclose(intrinsics.fx, 160.0)
+        assert math.isclose(intrinsics.fy, intrinsics.fx)
+    assert onboard_intrinsics(p.ER_BULLET_HARDWARE_OPENGL).cx == 159.5
+    assert onboard_intrinsics(p.ER_TINY_RENDERER).cx == 160.0
 
 
 def test_projection_matrix_agrees_with_intrinsics():
