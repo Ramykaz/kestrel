@@ -111,3 +111,11 @@ vLLM 0.10.1.1 serves `SmolVLM-256M-Instruct` in fp16 on a Kaggle T4, after three
 - The first chat request got a body that was not JSON. It used an image URL on Wikimedia that vLLM fetches itself; I did not capture that response, so the cause is not confirmed. A 320x240 PNG sent inline as a data URL worked.
 
 On the T4, vLLM fell back to its V0 engine ("Compute Capability < 8.0 is not supported by the V1 Engine") and to the XFormers attention backend, since FlashAttention-2 does not support Turing. The model loaded in 3.8 s using 0.49 GiB, and the server was healthy 46 s after launch, including 19 s of CUDA graph capture. One request with the inline image (877 prompt tokens, 9 completion tokens) took 2.10 s and answered "In the image there is a square." vLLM stays optional; llama.cpp remains the serving path the spec plans around.
+
+## 2026-10-20: TinyRenderer remembers the last light
+
+While trying lighting options, a render with only `shadow=1` came out as dark as the previous render, which had set a dim blue light. TinyRenderer keeps the light state from the last `getCameraImage` call for any argument that is left out. `Lighting.render_kwargs` now always passes every light argument, so a frame's look never depends on the frame rendered before it.
+
+## 2026-10-20: A seam every 2 m on the voronoi ground
+
+The ground mesh repeats its texture every 2 m, so every texture must tile. A test that compares the wrap-around step with the largest step inside the tile failed only for the voronoi pattern, with a step of 97.6 against at most 6.4 inside. The tiled seed array is laid out seed by seed over 9 offsets, and I took the seed as `index % 12` instead of `index // 9`, so copies of one cell in neighboring tiles got different shades. The first version of that test compared against the mean step and also failed on checker, tiles, stripes and concrete, whose hard edges sit on the tile border by design.
