@@ -23,6 +23,7 @@ from kestrel.data.randomize import (
     sample_lighting,
     sample_style,
 )
+from kestrel.paths import REPO_ROOT
 from kestrel.sim.camera import HEIGHT, WIDTH, OnboardCamera, onboard_intrinsics
 from kestrel.sim.course import ensure_training_seed, generate_course, load_preset
 from kestrel.sim.oracle import Oracle
@@ -174,7 +175,7 @@ def _render_job_args(args: tuple) -> JobStats:
 
 
 def _git_commit() -> tuple[str, bool]:
-    root = Path(__file__).resolve().parents[2]
+    root = REPO_ROOT
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True
     ).stdout.strip()

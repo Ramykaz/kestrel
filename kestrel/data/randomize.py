@@ -14,8 +14,9 @@ import numpy as np
 import yaml
 
 from kestrel.data.postfx import CameraEffects, motion_blur_vector
+from kestrel.paths import CONFIG_DIR
 from kestrel.sim.camera import Intrinsics
-from kestrel.sim.course import CONFIG_DIR, VOLUME_HALF_XY_M, Course
+from kestrel.sim.course import VOLUME_HALF_XY_M, Course
 from kestrel.sim.scene import (
     DISTRACTOR_KINDS,
     GATE_PATTERNS,

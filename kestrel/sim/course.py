@@ -5,12 +5,11 @@ from __future__ import annotations
 import math
 import zlib
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 import yaml
 
-CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
+from kestrel.paths import CONFIG_DIR
 
 VOLUME_HALF_XY_M = 15.0
 VOLUME_HEIGHT_M = 6.0

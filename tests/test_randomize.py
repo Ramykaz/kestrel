@@ -12,8 +12,9 @@ from kestrel.data.randomize import (
     sample_effects,
     sample_style,
 )
+from kestrel.paths import CONFIG_DIR
 from kestrel.sim.camera import onboard_intrinsics
-from kestrel.sim.course import CONFIG_DIR, generate_course, load_preset
+from kestrel.sim.course import generate_course, load_preset
 from kestrel.sim.scene import GROUND_PATTERNS, ground_texture
 
 
