@@ -24,6 +24,9 @@ OCCLUDED = 1
 OUTSIDE_FRAME = 0
 
 MIN_BOX_AREA_PX = 36.0
+# With a segmentation mask, gates showing fewer pixels than this (hidden behind other objects)
+# get no label.
+MIN_VISIBLE_GATE_PX = 12
 # A ray to a keypoint counts as unobstructed if it hits something within this distance of it.
 OCCLUSION_TOLERANCE_M = 0.03
 # Rays start this far from the camera so they clear the drone's own 0.06 m collision cylinder.
@@ -113,10 +116,20 @@ def compute_gate_labels(
     camera_pos: np.ndarray,
     view_matrix: tuple[float, ...],
     intrinsics: Intrinsics,
+    segmentation: np.ndarray | None = None,
 ) -> list[GateLabel]:
-    """Labels for every gate in view. Gates behind the camera or under 36 px^2 are skipped."""
+    """Labels for every gate in view. Gates behind the camera or under 36 px^2 are skipped,
+    and with a segmentation mask so are gates almost entirely hidden by other objects."""
     labels = []
+    if segmentation is not None:
+        body_ids, pixel_counts = np.unique(segmentation, return_counts=True)
+        visible_px = dict(zip(body_ids.tolist(), pixel_counts.tolist(), strict=True))
     for index in range(oracle.gate_count):
+        if (
+            segmentation is not None
+            and visible_px.get(oracle.gate_body_ids[index], 0) < MIN_VISIBLE_GATE_PX
+        ):
+            continue
         outer_cam = world_to_camera(oracle.outer_box_corners_world(index), view_matrix)
         box = _projected_box(outer_cam, intrinsics)
         if box is None:
@@ -167,3 +180,27 @@ def yolo_pose_lines(labels: list[GateLabel], width: int, height: int) -> list[st
 def write_yolo_label(path: Path, labels: list[GateLabel], width: int, height: int) -> None:
     lines = yolo_pose_lines(labels, width, height)
     path.write_text("\n".join(lines) + ("\n" if lines else ""))
+
+
+def read_yolo_label(path: Path, width: int, height: int) -> list[GateLabel]:
+    """Parse a label file written by write_yolo_label. Gate indices are not stored, so they
+    come back as -1."""
+    size = np.array([width, height], dtype=float)
+    labels = []
+    for line in path.read_text().splitlines():
+        values = [float(v) for v in line.split()]
+        if len(values) != 17:
+            raise ValueError(f"{path}: expected 17 fields per line, got {len(values)}")
+        center, extent = np.array(values[1:3]), np.array(values[3:5])
+        box = np.r_[(center - extent / 2) * size - 0.5, (center + extent / 2) * size - 0.5]
+        points = np.array(values[5:]).reshape(4, 3)
+        labels.append(
+            GateLabel(
+                gate_index=-1,
+                class_id=int(values[0]),
+                box_xyxy=box,
+                keypoints=points[:, :2] * size - 0.5,
+                visibility=points[:, 2].astype(int),
+            )
+        )
+    return labels

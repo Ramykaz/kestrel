@@ -62,37 +62,46 @@ def sim_bench(
     )
 
 
+@app.command("gen")
+def gen(
+    out: Path = typer.Option(..., help="New dataset directory; must not exist or be empty."),
+    frames: int = typer.Option(8000, help="Total frames, split into train and val by course."),
+    dr: str = typer.Option("base", help="Domain randomization preset in configs/dr."),
+    seed: int = typer.Option(0, help="Seed for courses, looks and camera poses."),
+    workers: int = typer.Option(os.cpu_count() or 1, help="Worker processes."),
+    egl: bool = typer.Option(False, help="Render with EGL when available."),
+) -> None:
+    """Generate a labeled YOLO pose dataset of randomized scatter frames."""
+    from kestrel.data.generate import write_dataset
+    from kestrel.data.randomize import load_dr_preset
+
+    manifest = write_dataset(out, load_dr_preset(dr), frames, seed, workers, egl)
+    counts = manifest["counts"]
+    typer.echo(
+        f"wrote {out}: {counts['frames']['train']} train and {counts['frames']['val']} val "
+        f"frames from {counts['courses']} courses in {manifest['render_seconds']} s"
+    )
+    typer.echo(f"labels {counts['labels']}, frames without labels {counts['empty_frames']}")
+
+
 @data_app.command("preview")
 def data_preview(
+    dataset: Path = typer.Argument(..., help="Dataset directory written by kestrel gen."),
     out: Path = typer.Option(Path("artifacts/contact_sheet.png"), help="Output image path."),
     frames: int = typer.Option(64, help="Number of frames on the sheet."),
-    courses: int = typer.Option(8, help="Number of random training courses to draw from."),
-    preset: str = typer.Option("tech", help="Course preset."),
-    seed: int = typer.Option(0, help="Seed for course choice and camera poses."),
+    seed: int = typer.Option(0, help="Seed for choosing frames."),
 ) -> None:
-    """Write a contact sheet of random labeled scatter frames."""
-    import numpy as np
-
-    from kestrel.data.generate import render_scatter_frames
+    """Write a contact sheet of random frames from a dataset, labels drawn from its files."""
     from kestrel.data.labels import CLASS_GATE_BACK
-    from kestrel.data.preview import contact_sheet
-    from kestrel.sim.course import ensure_training_seed, generate_course, load_preset
+    from kestrel.data.preview import dataset_contact_sheet
 
-    rng = np.random.default_rng(seed)
-    course_preset = load_preset(preset)
-    per_course = [len(chunk) for chunk in np.array_split(np.arange(frames), courses)]
-    labeled = []
-    for count in per_course:
-        course_seed = int(rng.integers(0, 800_000))
-        ensure_training_seed(course_seed)
-        course = generate_course(course_seed, course_preset)
-        labeled += render_scatter_frames(course, count, rng)
+    sheet, labels = dataset_contact_sheet(dataset, frames, seed)
     out.parent.mkdir(parents=True, exist_ok=True)
-    contact_sheet(labeled).save(out)
-    gates = sum(len(f.labels) for f in labeled)
-    backs = sum(label.class_id == CLASS_GATE_BACK for f in labeled for label in f.labels)
-    empty = sum(not f.labels for f in labeled)
-    typer.echo(f"wrote {out}: {len(labeled)} frames, {gates} gate labels ({backs} gate_back)")
+    sheet.save(out)
+    gates = sum(len(frame) for frame in labels)
+    backs = sum(label.class_id == CLASS_GATE_BACK for frame in labels for label in frame)
+    empty = sum(not frame for frame in labels)
+    typer.echo(f"wrote {out}: {len(labels)} frames, {gates} gate labels ({backs} gate_back)")
     typer.echo(f"frames without any gate label: {empty}")
 
 

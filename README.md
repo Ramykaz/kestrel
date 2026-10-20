@@ -27,6 +27,8 @@ Each gate in view gets a box around its outer frame and 4 keypoints on the inner
 
 Keypoint colors on the sheet: top left red, top right green, bottom right blue, bottom left yellow. Hollow keypoints are occluded. Projected keypoints agree with the rendered gate edges to within 0.14 px on 50 random frames, for both renderers (`tests/test_label_projection.py`).
 
+Every frame is drawn with randomized looks from a preset in `configs/dr/`: gate color and pattern, one of 12 ground textures, a day, dusk or night sky, light from any direction, up to 15 poles, boxes and cones, motion blur, sensor noise, exposure and JPEG quality. The ranges in a preset must sit inside hard limits in `kestrel/data/randomize.py`. Gates hidden behind other objects get no label. The sheet above comes from `kestrel data preview`, which reads a written dataset back from disk.
+
 ## Development setup
 
 PyBullet has no Windows wheels, so development runs on Linux (WSL Ubuntu on Windows), the same as Kaggle.
@@ -51,4 +53,5 @@ export UV_PROJECT_ENVIRONMENT=$HOME/.venvs/kestrel
 | :- | :- |
 | `kestrel sim smoke` | Hovers the drone at 1 m for 5 s and renders the onboard camera. Fails if the hover error is above 0.10 m |
 | `kestrel sim bench --workers N [--egl]` | Measures onboard render throughput in frames per second |
-| `kestrel data preview` | Writes a contact sheet of 64 random labeled frames from training courses |
+| `kestrel gen --out DIR [--frames 8000] [--dr base]` | Writes a YOLO pose dataset of randomized frames from training courses, with `data.yaml` and `manifest.json` (preset, seeds, counts, git commit, intrinsics). Refuses to overwrite a dataset |
+| `kestrel data preview DIR` | Writes a contact sheet of 64 random frames from a dataset, with labels drawn from its label files |
