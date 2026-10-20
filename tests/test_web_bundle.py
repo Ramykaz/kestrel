@@ -5,7 +5,8 @@ import pytest
 
 from kestrel.eval.metrics import flight_metrics
 from kestrel.export.web_bundle import FLIGHT_MAGIC, check_bundle_size, encode_flight
-from kestrel.pilot.flight_log import Detection, FlightEnd, FlightLog, PilotState
+from kestrel.perception.detect import Detection
+from kestrel.pilot.flight_log import FlightEnd, FlightLog, PilotState
 
 
 def _log(end: FlightEnd, gates: int, frames: int = 5) -> FlightLog:
