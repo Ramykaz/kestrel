@@ -255,31 +255,3 @@ def _cone_mesh(radius: float, height: float, sides: int = 16) -> tuple[list, lis
 def hsv(h: float, s: float, v: float) -> RGB:
     r, g, b = colorsys.hsv_to_rgb(h % 1.0, s, v)
     return (r, g, b)
-
-
-# Fixed looks for the held-out suite. They never change between rounds, so every round is
-# measured on identical images.
-EVAL_STYLES = {
-    "day": SceneStyle(
-        sky_horizon=(0.80, 0.86, 0.92),
-        sky_zenith=(0.45, 0.62, 0.85),
-        ground_pattern="grass",
-        ground_colors=((0.30, 0.42, 0.22), (0.45, 0.55, 0.30)),
-        gate_color=(0.95, 0.45, 0.10),
-        gate_pattern="solid",
-        gate_pattern_color=(0.95, 0.45, 0.10),
-        lighting=Lighting((0.4, -0.3, 0.85), (1.0, 0.97, 0.92), 0.6, 0.6, 0.05),
-        texture_seed=1,
-    ),
-    "night": SceneStyle(
-        sky_horizon=(0.10, 0.12, 0.20),
-        sky_zenith=(0.02, 0.03, 0.08),
-        ground_pattern="asphalt",
-        ground_colors=((0.10, 0.10, 0.12), (0.22, 0.22, 0.25)),
-        gate_color=(0.95, 0.45, 0.10),
-        gate_pattern="solid",
-        gate_pattern_color=(0.95, 0.45, 0.10),
-        lighting=Lighting((-0.3, 0.5, 0.8), (0.55, 0.60, 0.85), 0.25, 0.35, 0.0),
-        texture_seed=2,
-    ),
-}
