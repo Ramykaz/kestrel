@@ -7,6 +7,7 @@ Every value in a preset must sit inside the hard limits below; SPEC 8.1 caps a r
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -105,6 +106,9 @@ def train_detector(
     """Train on a dataset written by kestrel gen, export out/detector.onnx and write
     out/train_report.json. Training stops after config.epochs, or at the end of the first
     epoch that finishes past config.gpu_minutes."""
+    # Notebook kernels export an inline matplotlib backend that this environment does not
+    # have, and ultralytics imports matplotlib while checking the dataset. Nothing is shown.
+    os.environ["MPLBACKEND"] = "Agg"
     from ultralytics import YOLO
 
     from kestrel.export.onnx_export import export_input_size, export_onnx
