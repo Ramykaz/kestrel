@@ -94,3 +94,43 @@ def data_preview(
     empty = sum(not f.labels for f in labeled)
     typer.echo(f"wrote {out}: {len(labeled)} frames, {gates} gate labels ({backs} gate_back)")
     typer.echo(f"frames without any gate label: {empty}")
+
+
+@app.command("export-web")
+def export_web(
+    out: Path = typer.Option(Path("web/public/data"), help="Bundle directory."),
+    reference_fixtures: bool = typer.Option(
+        False, help="Write reference autopilot fixtures for development instead of rounds."
+    ),
+    workers: int = typer.Option(os.cpu_count() or 1, help="Worker processes for fixtures."),
+) -> None:
+    """Write the static data bundle the website reads."""
+    from kestrel.export.web_bundle import check_bundle_size, flights_over_target
+
+    out.mkdir(parents=True, exist_ok=True)
+    if reference_fixtures:
+        if out.resolve() == (Path("web/public/data")).resolve():
+            raise typer.BadParameter("fixtures must not be written into the deployed bundle")
+        from kestrel.export.reference_fixtures import write_reference_fixtures
+
+        for r in write_reference_fixtures(out, workers):
+            m = r.metrics
+            typer.echo(
+                f"fixture round {r.round_index} {r.status:8s} completion {m.completion_rate:.2f} "
+                f"gates {m.gates_per_course:.2f} crash {m.crash_rate:.2f}  {r.label}"
+            )
+    else:
+        from kestrel.export.web_bundle import write_course_files, write_rounds_json
+        from kestrel.sim.course import eval_suite_seeds, generate_course, load_preset
+
+        seeds = eval_suite_seeds()
+        write_course_files(
+            out,
+            [generate_course(s, load_preset(preset)) for preset in seeds for s in seeds[preset]],
+        )
+        write_rounds_json(out, "rounds", [])
+        typer.echo("no rounds have run yet: wrote eval suite courses and an empty rounds.json")
+    files, total = check_bundle_size(out)
+    typer.echo(f"{out}: {files} files, {total / 1024:.0f} KiB")
+    for name, size in flights_over_target(out):
+        typer.echo(f"over the 150 KiB flight target: {name} {size / 1024:.0f} KiB")
