@@ -55,3 +55,5 @@ export UV_PROJECT_ENVIRONMENT=$HOME/.venvs/kestrel
 | `kestrel sim bench --workers N [--egl]` | Measures onboard render throughput in frames per second |
 | `kestrel gen --out DIR [--frames 8000] [--dr base]` | Writes a YOLO pose dataset of randomized frames from training courses, with `data.yaml` and `manifest.json` (preset, seeds, counts, git commit, intrinsics). Refuses to overwrite a dataset |
 | `kestrel data preview DIR` | Writes a contact sheet of 64 random frames from a dataset, with labels drawn from its label files |
+| `kestrel train --dataset DIR --out DIR [--preset base]` | Trains YOLO11n-pose within the preset's epoch and GPU minute limits and exports `detector.onnx`. Needs `uv sync --extra train`; `notebooks/kaggle_train.ipynb` runs it on a Kaggle T4 |
+| `kestrel fly --onnx FILE --out DIR [--courses suite\|straight]` | Flies the camera-only pilot on the 30 held-out courses or 10 straight training courses, saves every flight log, labels crash causes and writes `summary.json` with the SPEC 9.1 metrics |
