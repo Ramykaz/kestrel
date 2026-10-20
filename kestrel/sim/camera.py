@@ -8,6 +8,8 @@ from dataclasses import dataclass
 import numpy as np
 import pybullet as p
 
+from kestrel.sim.scene import SceneStyle
+
 WIDTH = 320
 HEIGHT = 240
 HFOV_DEG = 90.0
@@ -89,6 +91,10 @@ class OnboardCamera:
         pitch = math.radians(PITCH_UP_DEG)
         self._forward_body = np.array([math.cos(pitch), 0.0, math.sin(pitch)])
         self._up_body = np.array([-math.sin(pitch), 0.0, math.cos(pitch)])
+        k = self.intrinsics
+        v, u = np.mgrid[0:HEIGHT, 0:WIDTH].astype(float)
+        rays = np.stack([(u - k.cx) / k.fx, (v - k.cy) / k.fy, np.ones_like(u)], axis=-1)
+        self._pixel_rays = rays / np.linalg.norm(rays, axis=-1, keepdims=True)
 
     def view_matrix(self, drone_pos: np.ndarray, drone_quat: np.ndarray) -> tuple[float, ...]:
         body_to_world = np.array(p.getMatrixFromQuaternion(drone_quat.tolist())).reshape(3, 3)
@@ -101,20 +107,39 @@ class OnboardCamera:
         )
 
     def render(
-        self, drone_pos: np.ndarray, drone_quat: np.ndarray, segmentation: bool = False
+        self,
+        drone_pos: np.ndarray,
+        drone_quat: np.ndarray,
+        segmentation: bool = False,
+        style: SceneStyle | None = None,
     ) -> CameraFrame:
-        """Render the onboard view. With segmentation, also return per-pixel body ids
-        (-1 for background)."""
+        """Render the onboard view. With segmentation or a style, also return per-pixel body
+        ids (-1 for background). A style sets the lighting and paints the sky."""
         view = self.view_matrix(drone_pos, drone_quat)
+        with_seg = segmentation or style is not None
         _, _, rgba, _, seg = p.getCameraImage(
             WIDTH,
             HEIGHT,
             viewMatrix=view,
             projectionMatrix=self.projection_matrix,
             renderer=self.renderer,
-            flags=0 if segmentation else p.ER_NO_SEGMENTATION_MASK,
+            flags=0 if with_seg else p.ER_NO_SEGMENTATION_MASK,
             physicsClientId=self.client,
+            **(style.lighting.render_kwargs() if style is not None else {}),
         )
-        rgb = np.asarray(rgba, dtype=np.uint8).reshape(HEIGHT, WIDTH, 4)[:, :, :3]
-        seg_mask = np.asarray(seg, dtype=np.int32).reshape(HEIGHT, WIDTH) if segmentation else None
+        rgb = np.asarray(rgba, dtype=np.uint8).reshape(HEIGHT, WIDTH, 4)[:, :, :3].copy()
+        seg_mask = np.asarray(seg, dtype=np.int32).reshape(HEIGHT, WIDTH) if with_seg else None
+        if style is not None:
+            background = seg_mask == -1
+            rgb[background] = self._sky(view, style, background)
         return CameraFrame(rgb, view, self.projection_matrix, seg_mask)
+
+    def _sky(self, view: tuple[float, ...], style: SceneStyle, mask: np.ndarray) -> np.ndarray:
+        """Sky colors for the masked pixels, blended from horizon to zenith by elevation."""
+        world_to_cv = np.diag([1.0, -1.0, -1.0]) @ np.array(view).reshape(4, 4, order="F")[:3, :3]
+        up = self._pixel_rays[mask] @ world_to_cv[:, 2]
+        # Below the horizon the far plane cuts off the ground, which reads as haze.
+        t = np.clip(up / 0.6, 0.0, 1.0) ** 0.7
+        horizon = np.array(style.sky_horizon)
+        zenith = np.array(style.sky_zenith)
+        return ((horizon + t[:, None] * (zenith - horizon)) * 255).astype(np.uint8)
