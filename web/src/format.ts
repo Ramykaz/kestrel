@@ -18,11 +18,26 @@ const CRASH_TARGETS: Record<string, string> = {
   object: "an object",
 };
 
-/** How a flight ended, in a few words: "finished, 21.4 s" or "crashed at gate 2". */
-export function outcome(summary: Pick<FlightSummary, "end" | "gates_passed" | "gate_count" | "lap_time_s" | "end_time_s">): string {
+const CRASH_CAUSES: Record<string, string> = {
+  missed_gate: "the detector missed the gate",
+  bad_pose: "the gate position estimate was off",
+  late_turn: "turned too late",
+  lost_track: "lost track of the gate",
+  wrong_side: "aimed at a gate from behind",
+  decoy_followed: "followed a decoy",
+  unclassified: "cause not classified",
+};
+
+export function crashCause(cause: string | null | undefined): string | null {
+  return cause ? (CRASH_CAUSES[cause] ?? cause) : null;
+}
+
+/** How a flight ended, in a few words: "finished, 21.4 s" or "crashed at gate 2, turned too late". */
+export function outcome(summary: Pick<FlightSummary, "end" | "gates_passed" | "gate_count" | "lap_time_s" | "end_time_s" | "crash_cause">): string {
   if (summary.end === "finished" && summary.lap_time_s !== null) return `finished, ${summary.lap_time_s.toFixed(1)} s`;
   const gate = Math.min(summary.gates_passed + 1, summary.gate_count);
-  if (summary.end === "crash") return `crashed at gate ${gate}`;
+  const cause = crashCause(summary.crash_cause);
+  if (summary.end === "crash") return cause ? `crashed at gate ${gate}, ${cause}` : `crashed at gate ${gate}`;
   return `timed out before gate ${gate}`;
 }
 

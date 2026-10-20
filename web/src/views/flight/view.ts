@@ -3,7 +3,7 @@ import "./flight.css";
 import { frameAt, type Flight } from "../../data/flight";
 import { DataError, bestRound, loadBundle, loadCourse, loadFlight, suiteSeeds } from "../../data/load";
 import { PILOT_STATE_NAMES, type Bundle, type Course, type FlightSummary, type PilotState, type Round } from "../../data/types";
-import { clock, crashTarget, escapeHtml, outcome, percent } from "../../format";
+import { clock, crashCause, crashTarget, escapeHtml, outcome, percent } from "../../format";
 import { updateQuery, type MountedView } from "../../router";
 import { onThemeChange } from "../../theme";
 import { FlightChart } from "./chart";
@@ -295,7 +295,7 @@ export async function mount(root: HTMLElement, params: URLSearchParams): Promise
     const why = q(".why-text");
     if (r.report) why.textContent = r.report.summary;
     else if (bundle.source === "reference_fixtures") why.textContent = `${r.label}. Fixture rounds have no experiment card or verified report.`;
-    else why.textContent = "No verified report for this round.";
+    else why.textContent = `${r.label}. No verified agent report for this round.`;
     courseSelect.value = String(state.courseIndex);
     ghostToggle.checked = state.ghost;
     q<HTMLElement>(".ghost-switch").hidden = state.roundIndex === 0;
@@ -444,7 +444,9 @@ export async function mount(root: HTMLElement, params: URLSearchParams): Promise
     const s = summaryFor(round());
     if (!s || !flight) return;
     const gates = `${s.gates_passed} of ${s.gate_count} gates`;
-    const end = s.end === "crash" ? `then crashed into ${crashTarget(s.crash_body_kind)} after ${s.end_time_s.toFixed(1)} s` : s.end === "timeout" ? "then ran out of time" : `in ${s.lap_time_s?.toFixed(1)} s`;
+    const cause = crashCause(s.crash_cause);
+    const crash = `then crashed into ${crashTarget(s.crash_body_kind)} after ${s.end_time_s.toFixed(1)} s${cause ? ` (${cause})` : ""}`;
+    const end = s.end === "crash" ? crash : s.end === "timeout" ? "then ran out of time" : `in ${s.lap_time_s?.toFixed(1)} s`;
     summaryRegion.textContent = `Round ${round().round}, ${courseName(state.courseIndex)}: passed ${gates} ${end}.`;
     stage.setAttribute("aria-label", summaryRegion.textContent);
     insetCaption.textContent =

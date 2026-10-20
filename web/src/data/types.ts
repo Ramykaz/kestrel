@@ -12,6 +12,8 @@ export interface FlightSummary {
   gate_count: number;
   lap_time_s: number | null;
   crash_body_kind: string | null;
+  /** Ground-truth crash cause (SPEC 9.3); absent in fixture bundles. */
+  crash_cause?: string | null;
 }
 
 export interface FlightMetrics {
