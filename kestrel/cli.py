@@ -108,6 +108,7 @@ def fly(
     out: Path = typer.Option(..., help="New directory for flight logs and summary.json."),
     courses: str = typer.Option("suite", help="suite (30 held-out courses) or straight (10)."),
     pilot: str = typer.Option("base", help="Pilot preset in configs/pilot."),
+    label: str = typer.Option("", help="One line describing the round, shown on the site."),
     workers: int = typer.Option(os.cpu_count() or 1, help="Worker processes."),
 ) -> None:
     """Fly the camera-only pilot and score it with the evaluator."""
@@ -153,6 +154,7 @@ def fly(
         )
     summary = {
         "courses": courses,
+        "label": label,
         "onnx": str(onnx),
         "onnx_sha256": hashlib.sha256(onnx.read_bytes()).hexdigest(),
         "pilot": params.to_dict(),
@@ -197,6 +199,7 @@ def export_web(
         False, help="Write reference autopilot fixtures for development instead of rounds."
     ),
     workers: int = typer.Option(os.cpu_count() or 1, help="Worker processes for fixtures."),
+    rounds_root: Path = typer.Option(Path("artifacts/rounds"), help="Evaluated round directories."),
 ) -> None:
     """Write the static data bundle the website reads."""
     from kestrel.export.web_bundle import check_bundle_size, flights_over_target
@@ -214,16 +217,19 @@ def export_web(
                 f"gates {m.gates_per_course:.2f} crash {m.crash_rate:.2f}  {r.label}"
             )
     else:
-        from kestrel.export.web_bundle import write_course_files, write_rounds_json
-        from kestrel.sim.course import eval_suite_seeds, generate_course, load_preset
+        from kestrel.export.rounds import write_round_bundle
+        from kestrel.export.web_bundle import write_rounds_json
 
-        seeds = eval_suite_seeds()
-        write_course_files(
-            out,
-            [generate_course(s, load_preset(preset)) for preset in seeds for s in seeds[preset]],
-        )
-        write_rounds_json(out, "rounds", [])
-        typer.echo("no rounds have run yet: wrote eval suite courses and an empty rounds.json")
+        rounds = write_round_bundle(out, rounds_root)
+        write_rounds_json(out, "rounds", rounds)
+        for r in rounds:
+            m = r.metrics
+            typer.echo(
+                f"round {r.round_index} {r.status:8s} completion {m.completion_rate:.2f} "
+                f"gates {m.gates_per_course:.2f} crash {m.crash_rate:.2f}  {r.label}"
+            )
+        if not rounds:
+            typer.echo("no rounds have run yet: wrote eval suite courses and an empty rounds.json")
     files, total = check_bundle_size(out)
     typer.echo(f"{out}: {files} files, {total / 1024:.0f} KiB")
     for name, size in flights_over_target(out):

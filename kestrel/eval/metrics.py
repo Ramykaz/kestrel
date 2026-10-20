@@ -35,3 +35,26 @@ def flight_metrics(tech_flights: list[FlightLog], night_flights: list[FlightLog]
         crash_rate=sum(f.end is FlightEnd.CRASH for f in tech_flights) / len(tech_flights),
         night_completion=night_finished / len(night_flights) if night_flights else None,
     )
+
+
+def headline(metrics: FlightMetrics) -> tuple[float, float]:
+    """SPEC 9.1: completion rate, tie broken by gates per course."""
+    return metrics.completion_rate, metrics.gates_per_course
+
+
+def round_statuses(metrics_by_round: list[FlightMetrics]) -> list[str]:
+    """baseline for the first round, then promoted when the headline beats the best so far,
+    otherwise rejected."""
+    statuses = []
+    best: tuple[float, float] | None = None
+    for metrics in metrics_by_round:
+        score = headline(metrics)
+        if best is None:
+            statuses.append("baseline")
+        elif score > best:
+            statuses.append("promoted")
+        else:
+            statuses.append("rejected")
+        if best is None or score > best:
+            best = score
+    return statuses

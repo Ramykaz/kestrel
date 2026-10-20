@@ -12,7 +12,7 @@ import multiprocessing as mp
 from dataclasses import dataclass
 from pathlib import Path
 
-from kestrel.eval.metrics import FlightMetrics, flight_metrics
+from kestrel.eval.metrics import flight_metrics, round_statuses
 from kestrel.export.web_bundle import (
     BundleRound,
     encode_flight,
@@ -49,10 +49,6 @@ def _fly(job: _FlightJob) -> tuple[_FlightJob, FlightLog]:
     return job, fly_reference(job.course, job.params, seed=seed)
 
 
-def _headline(metrics: FlightMetrics) -> tuple[float, float]:
-    return metrics.completion_rate, metrics.gates_per_course
-
-
 def write_reference_fixtures(out_dir: Path, workers: int) -> list[BundleRound]:
     seeds = eval_suite_seeds()
     courses = {
@@ -70,9 +66,8 @@ def write_reference_fixtures(out_dir: Path, workers: int) -> list[BundleRound]:
 
     (out_dir / "flights").mkdir(parents=True, exist_ok=True)
     write_course_files(out_dir, all_courses)
-    rounds = []
-    best: tuple[float, float] | None = None
-    for index, params in enumerate(FIXTURE_ROUNDS):
+    metrics_by_round, summaries_by_round = [], []
+    for index in range(len(FIXTURE_ROUNDS)):
         logs = {job.course.seed: log for job, log in flown if job.round_index == index}
         summaries = {}
         for course in all_courses:
@@ -80,21 +75,23 @@ def write_reference_fixtures(out_dir: Path, workers: int) -> list[BundleRound]:
             name = flight_file_name(index, course.seed)
             (out_dir / name).write_bytes(encode_flight(log, len(course.gates), "ground_truth"))
             summaries[course.seed] = flight_summary(log, len(course.gates), name)
-        metrics = flight_metrics(
-            [logs[c.seed] for c in courses["tech"]], [logs[c.seed] for c in courses["night"]]
+        summaries_by_round.append(summaries)
+        metrics_by_round.append(
+            flight_metrics(
+                [logs[c.seed] for c in courses["tech"]], [logs[c.seed] for c in courses["night"]]
+            )
         )
-        if best is None:
-            status = "baseline"
-            best = _headline(metrics)
-        elif _headline(metrics) > best:
-            status = "promoted"
-            best = _headline(metrics)
-        else:
-            status = "rejected"
+    rounds = []
+    statuses = round_statuses(metrics_by_round)
+    for index, params in enumerate(FIXTURE_ROUNDS):
         label = (
             f"Reference autopilot at {params.speed_m_s:.1f} m/s, "
             f"gate position error {params.gate_position_noise_m:.2f} m"
         )
-        rounds.append(BundleRound(index, status, label, metrics, summaries))
+        rounds.append(
+            BundleRound(
+                index, statuses[index], label, metrics_by_round[index], summaries_by_round[index]
+            )
+        )
     write_rounds_json(out_dir, "reference_fixtures", rounds)
     return rounds
