@@ -29,11 +29,27 @@ SEARCH_CLIMB_SPEED_M_S = 1.0
 # The reference counts as at the approach point within this distance.
 ALIGN_RADIUS_M = 0.15
 EXIT_RADIUS_M = 0.4
+# A trusted approach point stops moving once the drone is within approach_offset plus this.
+# Close up, a few degrees of noise in the gate's direction swing the point by decimetres, and
+# a drone already near the gate would chase it backwards.
+APPROACH_FREEZE_MARGIN_M = 1.0
 # A gate is a candidate target only while the drone is this far in front of its plane.
 FRONT_MARGIN_M = 0.3
 # Target choice cost: metres of distance plus this many metres per radian of turn. Courses put
 # the next gate roughly ahead of the last one's exit, but the pilot is not told the order.
 TURN_COST_M_PER_RAD = 4.0
+
+
+def level(direction: np.ndarray, fallback: np.ndarray) -> np.ndarray:
+    """Horizontal unit vector along a direction. Approach points sit level with the gate
+    center: the drone often starts far below a gate, and a few degrees of tilt noise in a
+    close-up gate direction would otherwise move the point up or down by decimetres."""
+    for candidate in (direction, fallback):
+        horizontal = np.array([candidate[0], candidate[1], 0.0])
+        norm = float(np.linalg.norm(horizontal))
+        if norm > 1e-3:
+            return horizontal / norm
+    raise ValueError("neither direction has a horizontal component")
 
 
 def yaw_of(quat: np.ndarray) -> float:
@@ -56,6 +72,7 @@ class CameraPilot:
         self.state = PilotState.SEARCH
         self.target_id: int | None = None
         self.aligned = False
+        self.frozen_approach_point: np.ndarray | None = None
         self.commit_center = np.zeros(3)
         self.commit_forward = np.zeros(3)
         # Gates flown through, oldest first. Tracker estimates expire when out of view, so a
@@ -119,6 +136,7 @@ class CameraPilot:
             return
         self.target_id = choice.id
         self.aligned = False
+        self.frozen_approach_point = None
         self.search_s = 0.0
         self.state = PilotState.APPROACH
 
@@ -168,12 +186,25 @@ class CameraPilot:
         elif self.state is PilotState.APPROACH:
             target = self.tracker.get(self.target_id)
             assert target is not None
-            approach_point = target.center - target.forward * params.approach_offset
+            to_gate = target.center - own.pos
+            distance = float(np.linalg.norm(to_gate))
+            approach_point = self.frozen_approach_point
+            if approach_point is None and target.forward_trusted:
+                direction = level(target.forward, fallback=to_gate)
+                approach_point = target.center - direction * params.approach_offset
+                if distance < params.approach_offset + APPROACH_FREEZE_MARGIN_M:
+                    self.frozen_approach_point = approach_point
+            elif approach_point is None:
+                # Until the gate's direction is trusted, approach along the line of sight and
+                # fly straight at the gate once inside the approach distance.
+                direction = level(to_gate, fallback=target.forward)
+                approach_point = target.center - direction * params.approach_offset
+                if distance <= params.approach_offset:
+                    self.aligned = True
             if not self.aligned and self.reference.distance_to(approach_point) < ALIGN_RADIUS_M:
                 self.aligned = True
             self.goal = target.center if self.aligned else approach_point
             self.reference.advance(self.goal, params.speed_cap, not self.aligned, dt)
-            to_gate = target.center - own.pos
             self.yaw = turn_toward(self.yaw, math.atan2(to_gate[1], to_gate[0]), dt)
         else:
             self.goal = self.commit_center + self.commit_forward * params.exit_dist

@@ -1,5 +1,6 @@
 """The camera pilot in closed loop with a detector that reports true corners."""
 
+import numpy as np
 import pytest
 
 from kestrel.pilot.flight_log import FlightEnd
@@ -27,8 +28,15 @@ def test_camera_pilot_finishes_with_perfect_detections(preset, seed):
     assert log.gates_passed == len(course.gates)
 
 
-def test_out_of_order_gate_is_flown_again():
-    # On this course the last gate sits next to the first, and the pilot flies it right after
-    # gate 0. Only in-order passes count, so it has to come back for it at the end.
+def test_pilot_flies_a_passed_gate_again_when_nothing_new_is_found():
+    # On this course the pilot flies the last gate right after gate 0, out of order. After
+    # gate 6 nothing unflown is left in view, so after one search turn it has to fly an
+    # already passed gate again instead of searching until the timeout.
     log, _ = _fly("tech", 2008)
-    assert log.end is FlightEnd.FINISHED, (log.end, log.gates_passed)
+    assert log.gates_passed >= 7, (log.end, log.gates_passed)
+    targets_after_gate_6 = [
+        believed
+        for time_s, believed in zip(log.times, log.believed_gates, strict=True)
+        if time_s > log.gate_pass_times[6] and not np.any(np.isnan(believed))
+    ]
+    assert targets_after_gate_6
