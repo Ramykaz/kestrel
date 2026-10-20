@@ -1,0 +1,18 @@
+# Fixed domain randomization preset for the round 0 detector.
+course_presets: {straight: 0.15, slalom: 0.35, tech: 0.5}
+frames_per_course: 16
+gate_hue: [0.0, 1.0]
+gate_saturation: [0.2, 1.0]
+gate_value: [0.35, 1.0]
+gate_patterns: [solid, stripes, checker, noise]
+ground_patterns: [checker, tiles, stripes, grass, dirt, gravel, sand, concrete, asphalt, voronoi, dots, waves]
+ground_value: [0.15, 0.85]
+palettes: [day, dusk, night]
+light_intensity: [0.2, 1.2]
+distractors: [0, 15]
+speed_m_s: [0.0, 4.0]
+angular_rate_rad_s: [0.0, 3.0]
+motion_blur_px: [0, 9]
+noise_sigma: [0, 8]
+exposure_ev: [-1.5, 1.0]
+jpeg_quality: [40, 95]
