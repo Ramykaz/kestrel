@@ -62,3 +62,25 @@ What fixed it: the generator samples the 3D spacing first and derives the horizo
 ## 2026-10-20: EGL in WSL is software rendering
 
 The pybullet EGL plugin in WSL reports `GL_RENDERER=llvmpipe`, Mesa's CPU rasterizer. That explains why EGL measured slower than TinyRenderer on this laptop. EGL numbers only mean something on a machine with a real GPU behind EGL, such as a Kaggle T4.
+
+## 2026-10-20: The reference autopilot fell out of the sky
+
+What broke: the first ground-truth autopilot, built to make development flights for the website, crashed into the ground on almost every course above 1.5 m/s.
+
+How I found it: working through the forces. It chased a point 0.5 s ahead of the drone, so at 2.5 m/s DSLPIDControl saw a 1.25 m position error and asked for about 0.5 N of horizontal force. The CF2X weighs 0.26 N and tops out at 0.6 N of thrust, so it tilted about 60 degrees and lost altitude.
+
+What fixed it: the drone now tracks a reference point whose acceleration is limited to 2.5 m/s², and which slows into each approach point so it can line up with the gate's normal. At 1.5 m/s it finishes all 8 gates on every tech course tried. At higher speeds and with gate position error it still crashes into frames, which is the spread of outcomes the replay needs for testing.
+
+## 2026-10-20: The spec's own alert red fails its own contrast rule
+
+What broke: the WCAG check added to CI failed on its first run. The day theme's `--alert` (`#c6362b`) measures 4.46:1 on `--paper`, under the 4.5:1 that SPEC section 13.2 requires for all text.
+
+What fixed it: `--alert` is `#c3352a` in the day theme, the nearest shade that passes (4.58:1). Every other pair in both themes passed as specified.
+
+## 2026-10-20: A frame rate problem that was not mine
+
+What broke: in the automated Chrome window, the flight replay ran at about 1.5 frames per second and playback crawled at a fifth of real time.
+
+How I found it: the static Notes page measured the same 1.5 frames per second, and the top-down view, which draws no WebGL at all, measured 2. The browser was throttling animation frames for that window, not the page doing too much work. Lighthouse in a separate headless Chrome measured the real Flight view at 91 for mobile performance.
+
+What fixed it: nothing in the renderer needed fixing. The player did get one real fix out of it: it capped each frame's time step at 0.1 s, which made playback run slow on any device that cannot keep up. It now advances by real elapsed time and only ignores gaps longer than 0.5 s, such as returning to a hidden tab.
