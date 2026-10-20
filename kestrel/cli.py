@@ -84,6 +84,91 @@ def gen(
     typer.echo(f"labels {counts['labels']}, frames without labels {counts['empty_frames']}")
 
 
+@app.command("train")
+def train(
+    dataset: Path = typer.Option(..., help="Dataset directory written by kestrel gen."),
+    out: Path = typer.Option(..., help="New directory for weights, ONNX model and report."),
+    preset: str = typer.Option("base", help="Training preset in configs/train."),
+    device: str = typer.Option("0", help="CUDA device index, or cpu."),
+    seed: int = typer.Option(0, help="Training seed."),
+) -> None:
+    """Train the gate detector and export it to ONNX."""
+    from kestrel.perception.train import load_train_preset, train_detector
+
+    result = train_detector(dataset, out, load_train_preset(preset), device, seed)
+    pose_map = result.metrics.get("metrics/mAP50-95(P)")
+    typer.echo(f"trained {result.epochs_run} epochs in {result.minutes:.1f} min")
+    typer.echo(f"pose mAP50-95 on val: {pose_map}")
+    typer.echo(f"wrote {result.onnx} and {out / 'train_report.json'}")
+
+
+@app.command("fly")
+def fly(
+    onnx: Path = typer.Option(..., help="Detector exported by kestrel train."),
+    out: Path = typer.Option(..., help="New directory for flight logs and summary.json."),
+    courses: str = typer.Option("suite", help="suite (30 held-out courses) or straight (10)."),
+    pilot: str = typer.Option("base", help="Pilot preset in configs/pilot."),
+    workers: int = typer.Option(os.cpu_count() or 1, help="Worker processes."),
+) -> None:
+    """Fly the camera-only pilot and score it with the evaluator."""
+    import hashlib
+    import json
+
+    from kestrel.eval.crash_cause import crash_cause
+    from kestrel.eval.metrics import flight_metrics
+    from kestrel.eval.suite import eval_courses, run_flights, straight_check_courses
+    from kestrel.pilot.flight_log import FlightEnd, save_flight_log
+    from kestrel.pilot.params import load_pilot_preset
+
+    if courses not in ("suite", "straight"):
+        raise typer.BadParameter(f"courses must be suite or straight, got {courses!r}")
+    if out.exists() and any(out.iterdir()):
+        raise typer.BadParameter(f"{out} already holds files; flight results are never overwritten")
+    course_list = eval_courses() if courses == "suite" else straight_check_courses()
+    params = load_pilot_preset(pilot)
+    logs = run_flights(course_list, onnx, params, workers)
+
+    (out / "flights").mkdir(parents=True, exist_ok=True)
+    flights = []
+    for course, log in zip(course_list, logs, strict=True):
+        name = f"flights/{course.preset}-s{course.seed}.npz"
+        save_flight_log(log, out / name)
+        record = {
+            "seed": course.seed,
+            "preset": course.preset,
+            "file": name,
+            "end": log.end.name.lower() if log.end else None,
+            "end_time_s": round(log.end_time or 0.0, 2),
+            "gates_passed": log.gates_passed,
+            "gate_count": len(course.gates),
+            "lap_time_s": None if log.lap_time_s is None else round(log.lap_time_s, 2),
+            "crash_body_kind": log.crash_body_kind,
+            "crash": crash_cause(log, course).to_dict() if log.end is FlightEnd.CRASH else None,
+        }
+        flights.append(record)
+        cause = record["crash"]["cause"] if record["crash"] else ""
+        typer.echo(
+            f"{course.preset:8s} {course.seed}  {record['end']:8s} "
+            f"{log.gates_passed}/{len(course.gates)} gates  {cause}"
+        )
+    summary = {
+        "courses": courses,
+        "onnx": str(onnx),
+        "onnx_sha256": hashlib.sha256(onnx.read_bytes()).hexdigest(),
+        "pilot": params.to_dict(),
+        "flights": flights,
+    }
+    if courses == "suite":
+        tech = [log for c, log in zip(course_list, logs, strict=True) if c.preset == "tech"]
+        night = [log for c, log in zip(course_list, logs, strict=True) if c.preset == "night"]
+        summary["metrics"] = flight_metrics(tech, night).to_dict()
+        typer.echo(json.dumps(summary["metrics"]))
+    finished = sum(f["end"] == "finished" for f in flights)
+    summary["finished"] = finished
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    typer.echo(f"finished {finished} of {len(flights)}; wrote {out / 'summary.json'}")
+
+
 @data_app.command("preview")
 def data_preview(
     dataset: Path = typer.Argument(..., help="Dataset directory written by kestrel gen."),
