@@ -72,12 +72,19 @@ def corner_winding_matches_class(detection: Detection) -> bool:
 
 
 def decode_predictions(
-    raw: np.ndarray, scale: float, offset: np.ndarray, conf_thresh: float
+    raw: np.ndarray,
+    scale: float,
+    offset: np.ndarray,
+    frame_size: tuple[int, int],
+    conf_thresh: float,
 ) -> list[Detection]:
     """Turn raw network rows (one per candidate) into detections in frame pixels.
 
     scale and offset describe the letterbox: input pixel = frame pixel edge * scale + offset.
+    Boxes are clipped to the frame of size (width, height), as the training labels are.
     """
+    low = np.array([-0.5, -0.5])
+    high = np.array(frame_size, dtype=float) - 0.5
     class_scores = raw[:, 4 : 4 + CLASS_COUNT]
     confidence = class_scores.max(axis=1)
     candidates = np.flatnonzero(confidence >= conf_thresh)
@@ -91,7 +98,7 @@ def decode_predictions(
     for i in keep:
         # The network predicts in pixel-edge coordinates (top left corner of the image is
         # 0); OpenCV pixel centers sit half a pixel further in.
-        box = ((boxes[i].reshape(2, 2) - offset) / scale - 0.5).ravel()
+        box = np.clip((boxes[i].reshape(2, 2) - offset) / scale - 0.5, low, high).ravel()
         points = rows[i, 4 + CLASS_COUNT :].reshape(KEYPOINTS, 3)
         keypoints = (points[:, :2] - offset) / scale - 0.5
         visibility = np.where(points[:, 2] >= KEYPOINT_VISIBLE_SCORE, VISIBLE, NOT_VISIBLE)
@@ -145,4 +152,5 @@ class GateDetector:
         canvas, scale, offset = self._letterbox(rgb)
         blob = canvas.transpose(2, 0, 1)[None].astype(np.float32) / 255.0
         raw = self.session.run(None, {self.input_name: blob})[0][0].T
-        return decode_predictions(raw, scale, offset, conf_thresh)
+        frame_size = (rgb.shape[1], rgb.shape[0])
+        return decode_predictions(raw, scale, offset, frame_size, conf_thresh)

@@ -110,13 +110,18 @@ def test_decode_maps_letterbox_back_and_suppresses_duplicates():
     duplicate = [122, 79, 60, 60, 0.80, 0.05, *keypoints]
     weak = [250, 150, 20, 20, 0.10, 0.05, *keypoints]
     back = [40, 200, 30, 30, 0.10, 0.70, *keypoints]
-    detections = decode_predictions(np.array([best, duplicate, weak, back]), scale, offset, 0.4)
+    raw = np.array([best, duplicate, weak, back])
+    detections = decode_predictions(raw, scale, offset, (320, 240), 0.4)
     assert [d.class_id for d in detections] == [CLASS_GATE, CLASS_GATE_BACK]
     first = detections[0]
     assert first.confidence == pytest.approx(0.95)
     np.testing.assert_allclose(first.box_xyxy, [89.5, 39.5, 149.5, 99.5])
     np.testing.assert_allclose(first.keypoints[0], [99.5, 49.5])
     assert first.visibility.tolist() == [2, 2, 2, 0]
+    np.testing.assert_allclose(detections[1].box_xyxy, [24.5, 176.5, 54.5, 206.5])
+    edge = [310, 120, 40, 20, 0.9, 0.0, *keypoints]
+    clipped = decode_predictions(np.array([edge]), scale, offset, (320, 240), 0.4)[0]
+    np.testing.assert_allclose(clipped.box_xyxy, [289.5, 101.5, 319.5, 121.5])
 
 
 def test_nms_keeps_separate_boxes():
