@@ -15,6 +15,9 @@ CONFIRM_HITS = 3
 # PnP on a gate a few pixels tall pins down its position but hardly its facing direction, so
 # observations farther than this update the direction with weight falling as 1 / distance^2.
 FORWARD_TRUST_M = 2.5
+# Total update weight after which a gate's direction is trusted, about 3 close observations
+# at an EMA weight of 0.3.
+FORWARD_CONFIDENT_WEIGHT = 1.0
 
 
 @dataclass
@@ -24,11 +27,21 @@ class GateHypothesis:
     forward: np.ndarray
     hits: int
     last_seen_s: float
+    forward_weight: float
+    """Sum of the weights of all direction updates so far."""
     passed: bool = False
 
     @property
     def confirmed(self) -> bool:
         return self.hits >= CONFIRM_HITS
+
+    @property
+    def forward_trusted(self) -> bool:
+        return self.forward_weight >= FORWARD_CONFIDENT_WEIGHT
+
+
+def _forward_weight(ema_alpha: float, distance_m: float) -> float:
+    return ema_alpha * min(1.0, (FORWARD_TRUST_M / distance_m) ** 2)
 
 
 class GateTracker:
@@ -53,15 +66,17 @@ class GateTracker:
                         observation.forward.copy(),
                         1,
                         time_s,
+                        _forward_weight(self.ema_alpha, observation.distance_m),
                     )
                 )
                 self._next_id += 1
                 continue
             a = self.ema_alpha
             match.center = (1 - a) * match.center + a * observation.center
-            b = a * min(1.0, (FORWARD_TRUST_M / observation.distance_m) ** 2)
+            b = _forward_weight(a, observation.distance_m)
             forward = (1 - b) * match.forward + b * observation.forward
             match.forward = forward / max(np.linalg.norm(forward), 1e-9)
+            match.forward_weight += b
             match.hits += 1
             match.last_seen_s = time_s
         self.hypotheses = [
