@@ -12,6 +12,9 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 
+from kestrel.sim.course import Course, GatePose
+from kestrel.sim.gates import FRAME_DEPTH_M, gate_urdf_path
+
 log = logging.getLogger(__name__)
 
 PHYSICS_HZ = 240
@@ -83,6 +86,20 @@ class World:
     @property
     def time_s(self) -> float:
         return self.step_count / PHYSICS_HZ
+
+    def add_gate(self, gate: GatePose, depth: float = FRAME_DEPTH_M) -> int:
+        x, y, z = gate.center
+        return p.loadURDF(
+            str(gate_urdf_path(z, depth)),
+            [x, y, 0.0],
+            p.getQuaternionFromEuler([0.0, 0.0, gate.yaw]),
+            useFixedBase=True,
+            physicsClientId=self.client,
+        )
+
+    def load_course(self, course: Course) -> list[int]:
+        """Spawn every gate of the course and return their body ids in course order."""
+        return [self.add_gate(gate) for gate in course.gates]
 
     def reset_drone(self, pos: np.ndarray, yaw: float = 0.0) -> None:
         quat = p.getQuaternionFromEuler([0.0, 0.0, yaw])
