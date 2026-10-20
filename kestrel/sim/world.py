@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import logging
+import subprocess
+import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from importlib.resources import files
@@ -23,6 +26,27 @@ CAMERA_HZ = 30
 GRAVITY = 9.8
 
 CF2X_URDF = str(files("gym_pybullet_drones") / "assets" / "cf2x.urdf")
+
+_EGL_PROBE = """
+import importlib.util, pybullet as p
+client = p.connect(p.DIRECT)
+spec = importlib.util.find_spec("eglRenderer")
+if p.loadPlugin(spec.origin, "_eglRendererPlugin") >= 0:
+    print("egl-ok")
+"""
+
+
+@functools.cache
+def egl_available() -> bool:
+    """Whether the EGL plugin loads, tested in a child process."""
+    # Without an EGL display the plugin calls exit() inside C, which no Python fallback survives,
+    # and the exit status is not reliably nonzero, so success is a line on stdout.
+    if importlib.util.find_spec("eglRenderer") is None:
+        return False
+    probe = subprocess.run(
+        [sys.executable, "-c", _EGL_PROBE], capture_output=True, timeout=60, check=False
+    )
+    return probe.returncode == 0 and "egl-ok" in probe.stdout.decode(errors="replace").split()
 
 
 @dataclass(frozen=True)
@@ -69,10 +93,11 @@ class World:
         self.step_count = 0
 
     def _try_load_egl(self) -> None:
-        spec = importlib.util.find_spec("eglRenderer")
-        if spec is None or spec.origin is None:
-            log.warning("EGL requested but the eglRenderer module is missing; using TinyRenderer")
+        if not egl_available():
+            log.warning("EGL requested but no EGL display is available; using TinyRenderer")
             return
+        spec = importlib.util.find_spec("eglRenderer")
+        assert spec is not None and spec.origin is not None
         plugin_id = p.loadPlugin(spec.origin, "_eglRendererPlugin", physicsClientId=self.client)
         if plugin_id < 0:
             log.warning("EGL plugin failed to load; using TinyRenderer")

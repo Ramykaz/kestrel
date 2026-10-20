@@ -84,3 +84,7 @@ What broke: in the automated Chrome window, the flight replay ran at about 1.5 f
 How I found it: the static Notes page measured the same 1.5 frames per second, and the top-down view, which draws no WebGL at all, measured 2. The browser was throttling animation frames for that window, not the page doing too much work. Lighthouse in a separate headless Chrome measured the real Flight view at 91 for mobile performance.
 
 What fixed it: nothing in the renderer needed fixing. The player did get one real fix out of it: it capped each frame's time step at 0.1 s, which made playback run slow on any device that cannot keep up. It now advances by real elapsed time and only ignores gaps longer than 0.5 s, such as returning to a hidden tab.
+
+## 2026-10-20: EGL plugin killed pytest in CI
+
+The first GitHub Actions run stopped after 26 tests with exit code 1 and no pytest summary. Test 27 is the EGL projection test. On a runner with no EGL display, PyBullet's EGL plugin prints "failed to EGL with glad." and calls exit() inside C, so the fallback to TinyRenderer and the test's skip never ran. I reproduced it in WSL by pointing `__EGL_VENDOR_LIBRARY_FILENAMES` at a missing file. `World` now loads the plugin only after a child process has loaded it and printed a success line. The exit status alone was not enough, because one local run of the crashing load returned 0. CI also installs Mesa's software EGL, so the EGL test runs there instead of skipping.
