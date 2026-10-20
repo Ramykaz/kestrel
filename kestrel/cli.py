@@ -138,7 +138,7 @@ def fly(
             "seed": course.seed,
             "preset": course.preset,
             "file": name,
-            "end": log.end.name.lower() if log.end else None,
+            "end": None if log.end is None else log.end.name.lower(),
             "end_time_s": round(log.end_time or 0.0, 2),
             "gates_passed": log.gates_passed,
             "gate_count": len(course.gates),
