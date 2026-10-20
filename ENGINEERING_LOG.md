@@ -24,7 +24,7 @@ What fixed it: `World` sets every drone link's visual alpha to 0. No PyBullet ca
 
 ## 2026-10-20: Local render throughput
 
-Laptop numbers only (Intel i7-1195G7, 8 logical CPUs, WSL Ubuntu 24.04). Kaggle numbers still to be measured with `notebooks/kaggle_round.ipynb`.
+Laptop numbers only (Intel i7-1195G7, 8 logical CPUs, WSL Ubuntu 24.04). Kaggle numbers are in the next entry.
 
 Scene: ground plane plus 12 box distractors, 320x240 onboard camera, random poses. No gates yet, so this will be measured again in phase 1.
 
@@ -36,6 +36,19 @@ Scene: ground plane plus 12 box distractors, 320x240 onboard camera, random pose
 | EGL | 8 | 122.3 |
 
 EGL loads in WSL but runs slower than TinyRenderer, which points to a software OpenGL fallback rather than the GPU. The EGL number that matters is the one from a Kaggle T4.
+
+## 2026-10-20: Kaggle render throughput
+
+Measured with `notebooks/kaggle_round.ipynb` on a Kaggle notebook with 4 CPUs, Python 3.11.17, same scene as the local table. Clone to smoke pass took 26 s, and the smoke hover error was 0.005 m.
+
+| Renderer | Workers | Frames/s |
+| :- | :- | :- |
+| TinyRenderer | 1 | 98.3 |
+| TinyRenderer | 4 | 213.7 |
+| EGL | 1 | 50.3 |
+| EGL | 4 | 95.9 |
+
+EGL on Kaggle reported `GL_RENDERER=llvmpipe` and one EGL device, so it drew on the CPU, as in WSL, and the T4 did no rendering. TinyRenderer stays the default, as the spec already says. At 213.7 frames/s, the 8k frame first dataset is under a minute of rendering before label ray tests.
 
 ## 2026-10-20: TinyRenderer draws half a pixel off
 
