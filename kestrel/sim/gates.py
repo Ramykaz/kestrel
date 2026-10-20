@@ -22,6 +22,9 @@ POST_WIDTH_M = 0.04
 
 GATE_RGBA = (0.95, 0.45, 0.10, 1.0)
 
+# Link indices follow the order of parts in gate_urdf_text.
+GATE_POST_LINK_INDEX = 4
+
 _URDF_DIR = Path(tempfile.gettempdir()) / "kestrel_urdf"
 
 
