@@ -21,6 +21,8 @@ The simulator knows everything and uses it only for labels, scoring, and crash c
 
 ## Synthetic labels
 
+Gates are square frames, 0.60 m inside and 0.80 m outside, on a post. The front face of every frame is white; without it a gate looks the same from both sides apart from its 5 cm depth, and the first detector could not tell front from back.
+
 Each gate in view gets a box around its outer frame and 4 keypoints on the inner corners of its front face, ordered top left, top right, bottom right, bottom left as seen from the front. Gates seen from behind get a separate class, `gate_back`, so the pilot never aims at the wrong side. Keypoints are marked visible, occluded (blocked on a ray test) or outside the frame.
 
 ![64 random labeled frames](docs/contact_sheet.webp)
