@@ -12,6 +12,8 @@ from PIL import Image
 app = typer.Typer(no_args_is_help=True)
 sim_app = typer.Typer(no_args_is_help=True, help="Simulator checks and measurements.")
 app.add_typer(sim_app, name="sim")
+data_app = typer.Typer(no_args_is_help=True, help="Synthetic data generation and QA.")
+app.add_typer(data_app, name="data")
 
 
 @app.callback()
@@ -58,3 +60,37 @@ def sim_bench(
         f"renderer {result.renderer}, {result.workers} workers of {os.cpu_count()} CPUs: "
         f"{result.frames} frames in {result.wall_seconds:.2f} s, {result.fps:.1f} frames/s"
     )
+
+
+@data_app.command("preview")
+def data_preview(
+    out: Path = typer.Option(Path("artifacts/contact_sheet.png"), help="Output image path."),
+    frames: int = typer.Option(64, help="Number of frames on the sheet."),
+    courses: int = typer.Option(8, help="Number of random training courses to draw from."),
+    preset: str = typer.Option("tech", help="Course preset."),
+    seed: int = typer.Option(0, help="Seed for course choice and camera poses."),
+) -> None:
+    """Write a contact sheet of random labeled scatter frames."""
+    import numpy as np
+
+    from kestrel.data.generate import render_scatter_frames
+    from kestrel.data.labels import CLASS_GATE_BACK
+    from kestrel.data.preview import contact_sheet
+    from kestrel.sim.course import ensure_training_seed, generate_course, load_preset
+
+    rng = np.random.default_rng(seed)
+    course_preset = load_preset(preset)
+    per_course = [len(chunk) for chunk in np.array_split(np.arange(frames), courses)]
+    labeled = []
+    for count in per_course:
+        course_seed = int(rng.integers(0, 800_000))
+        ensure_training_seed(course_seed)
+        course = generate_course(course_seed, course_preset)
+        labeled += render_scatter_frames(course, count, rng)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    contact_sheet(labeled).save(out)
+    gates = sum(len(f.labels) for f in labeled)
+    backs = sum(label.class_id == CLASS_GATE_BACK for f in labeled for label in f.labels)
+    empty = sum(not f.labels for f in labeled)
+    typer.echo(f"wrote {out}: {len(labeled)} frames, {gates} gate labels ({backs} gate_back)")
+    typer.echo(f"frames without any gate label: {empty}")
