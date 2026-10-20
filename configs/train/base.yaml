@@ -1,0 +1,16 @@
+# Detector training preset for round 0.
+base_weights: yolo11n-pose.pt
+epochs: 150
+gpu_minutes: 20
+imgsz: 320
+batch: 64
+freeze: 0
+augment:
+  hsv_h: 0.015
+  hsv_s: 0.5
+  hsv_v: 0.4
+  degrees: 10.0
+  translate: 0.1
+  scale: 0.5
+  fliplr: 0.5
+  mosaic: 1.0

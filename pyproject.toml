@@ -7,12 +7,24 @@ requires-python = ">=3.11,<3.13"
 dependencies = [
     "gym-pybullet-drones",
     "numpy>=1.26",
+    "onnxruntime>=1.20",
     "opencv-python-headless>=4.9",
     "pillow>=10.0",
     "pyyaml>=6.0",
     "pybullet>=3.2.6",
     "scipy>=1.11",
     "typer>=0.12",
+]
+
+[project.optional-dependencies]
+# Detector training and ONNX export. torch 2.7.1 (CUDA 12.6) is the version that ran on a
+# Kaggle T4 in Phase 0; newer default wheels may need a newer driver than Kaggle has.
+train = [
+    "onnx>=1.17",
+    "onnxslim>=0.1.50",
+    "torch==2.7.1",
+    "torchvision==0.22.1",
+    "ultralytics==8.4.183",
 ]
 
 [project.scripts]
@@ -33,6 +45,11 @@ gym-pybullet-drones = { git = "https://github.com/learnsyslab/gym-pybullet-drone
 
 # Upstream declares torch, stable-baselines3 and matplotlib as hard dependencies and
 # requires Python 3.12. We only use the CF2X assets and DSLPIDControl, which need these.
+[tool.uv]
+# ultralytics requires opencv-python, which overwrites the same cv2 module as the headless
+# build used here and needs libGL. The headless build provides everything ultralytics uses.
+override-dependencies = ["opencv-python; sys_platform == 'never'"]
+
 [[tool.uv.dependency-metadata]]
 name = "gym-pybullet-drones"
 version = "2.2.0"
