@@ -4,7 +4,7 @@ A camera-only racing drone that a team of AI agents teaches to fly, in simulatio
 
 The drone has one forward camera and its own motion estimate. It does not know where the gates are. Agents generate synthetic training data, train a gate detector, tune the flight controller, review crash footage, and decide what to try next. Every claim an agent makes is checked by code.
 
-Status: phase 0 (setup and measurement).
+Status: phase 1 (world and labels).
 
 ## Rules of the world
 
@@ -18,6 +18,14 @@ These rules define what camera-only means here.
 | | Which objects are decoys |
 
 The simulator knows everything and uses it only for labels, scoring, and crash cause ground truth. Only `kestrel/sim/oracle.py` may read gate ground truth, and a test asserts that nothing under `kestrel/pilot/` imports it.
+
+## Synthetic labels
+
+Each gate in view gets a box around its outer frame and 4 keypoints on the inner corners of its front face, ordered top left, top right, bottom right, bottom left as seen from the front. Gates seen from behind get a separate class, `gate_back`, so the pilot never aims at the wrong side. Keypoints are marked visible, occluded (blocked on a ray test) or outside the frame.
+
+![64 random labeled frames](docs/contact_sheet.webp)
+
+Keypoint colors on the sheet: top left red, top right green, bottom right blue, bottom left yellow. Hollow keypoints are occluded. Projected keypoints agree with the rendered gate edges to within 0.14 px on 50 random frames, for both renderers (`tests/test_label_projection.py`).
 
 ## Development setup
 
@@ -43,3 +51,4 @@ export UV_PROJECT_ENVIRONMENT=$HOME/.venvs/kestrel
 | :- | :- |
 | `kestrel sim smoke` | Hovers the drone at 1 m for 5 s and renders the onboard camera. Fails if the hover error is above 0.10 m |
 | `kestrel sim bench --workers N [--egl]` | Measures onboard render throughput in frames per second |
+| `kestrel data preview` | Writes a contact sheet of 64 random labeled frames from training courses |

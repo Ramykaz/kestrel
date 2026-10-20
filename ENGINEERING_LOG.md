@@ -36,3 +36,29 @@ Scene: ground plane plus 12 box distractors, 320x240 onboard camera, random pose
 | EGL | 8 | 122.3 |
 
 EGL loads in WSL but runs slower than TinyRenderer, which points to a software OpenGL fallback rather than the GPU. The EGL number that matters is the one from a Kaggle T4.
+
+## 2026-10-20: TinyRenderer draws half a pixel off
+
+What broke: the first version of the label projection test failed. Projected gate corners and rendered corners disagreed by up to 1.09 px, more than the 1 px the spec allows.
+
+How I found it: averaging the signed corner offsets over 200 corners gave (+0.48, -0.48) px with a spread of only 0.13 px, so a constant offset, not noise. The same test with the EGL renderer gave (-0.008, -0.004) px. TinyRenderer samples pixel i at viewport coordinate i instead of i + 0.5, then flips rows, which shifts its whole image by (+0.5, -0.5) px against an ideal pinhole camera.
+
+What fixed it: `onboard_intrinsics` takes the renderer. For TinyRenderer the principal point is (160.0, 119.0); for EGL it is (159.5, 119.5). Datasets will store the intrinsics of the renderer that drew them, so PnP uses the right ones.
+
+## 2026-10-20: Measuring rendered corners by line fitting was the wrong test
+
+What broke: after the intrinsics fix, one corner in 200 still measured 1.02 px off. The projection was fine. The top edge of that gate rose only 0.9 px over 18 px, so it rendered as a staircase with a single step, and a least-squares line through one step overestimates the slope and misplaces the extrapolated corner. A max-margin line fit made it worse (1.23 px).
+
+What fixed it: the test no longer fits lines. The quad through the projected keypoints predicts, for every pixel center, whether it is in the gate opening; the farthest pixel that disagrees with that prediction bounds the projection error directly. Worst case over 50 frames: 0.136 px for TinyRenderer, 0.131 px for EGL. Injecting a known offset reads back correctly (0.5 px measures 0.5 to 0.6 px), which also showed that the spec's 1 px limit would have let the half pixel TinyRenderer bug through. The test threshold is 0.25 px.
+
+## 2026-10-20: Course spacing broke the 7 m limit on climbing courses
+
+What broke: `tech` courses produced consecutive gates 7.03 m apart. The generator sampled the horizontal distance and then added the height change on top.
+
+How I found it: the course constraint test checks 3D spacing on 40 seeds per preset.
+
+What fixed it: the generator samples the 3D spacing first and derives the horizontal distance from it and the climb.
+
+## 2026-10-20: EGL in WSL is software rendering
+
+The pybullet EGL plugin in WSL reports `GL_RENDERER=llvmpipe`, Mesa's CPU rasterizer. That explains why EGL measured slower than TinyRenderer on this laptop. EGL numbers only mean something on a machine with a real GPU behind EGL, such as a Kaggle T4.
