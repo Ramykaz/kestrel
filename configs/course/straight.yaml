@@ -1,0 +1,5 @@
+gates: 4
+turn_deg: [0, 15]
+alternate_turns: false
+height_change_m: 0.0
+lighting: day

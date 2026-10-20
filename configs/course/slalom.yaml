@@ -1,0 +1,5 @@
+gates: 6
+turn_deg: [20, 60]
+alternate_turns: true
+height_change_m: 0.3
+lighting: day
