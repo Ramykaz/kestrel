@@ -1,0 +1,51 @@
+[project]
+name = "kestrel"
+version = "0.1.0"
+description = "A camera-only racing drone that a team of AI agents teaches to fly, in simulation"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "gym-pybullet-drones",
+    "numpy>=1.26",
+    "pillow>=10.0",
+    "pybullet>=3.2.6",
+    "scipy>=1.11",
+    "typer>=0.12",
+]
+
+[project.scripts]
+kestrel = "kestrel.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+gym-pybullet-drones = { git = "https://github.com/learnsyslab/gym-pybullet-drones", rev = "f83fbdd4ee1c07e1afa52694963f3a9a889a0f56" }
+
+# Upstream declares torch, stable-baselines3 and matplotlib as hard dependencies and
+# requires Python 3.12. We only use the CF2X assets and DSLPIDControl, which need these.
+[[tool.uv.dependency-metadata]]
+name = "gym-pybullet-drones"
+version = "2.2.0"
+requires-python = ">=3.10"
+requires-dist = ["gymnasium>=1.0", "numpy", "pybullet", "scipy"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
