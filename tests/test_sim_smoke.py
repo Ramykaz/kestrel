@@ -3,7 +3,11 @@ import math
 import numpy as np
 import pybullet as p
 
+from kestrel.eval.suite import EVAL_LOOKS
 from kestrel.sim.camera import HEIGHT, WIDTH, OnboardCamera, onboard_intrinsics
+from kestrel.sim.course import generate_course, load_preset
+from kestrel.sim.gates import FRONT_MARKER_LINK_INDICES, FRONT_MARKER_RGBA
+from kestrel.sim.scene import apply_style
 from kestrel.sim.smoke import HOVER_TOLERANCE_M, run_hover
 from kestrel.sim.world import World
 
@@ -61,3 +65,18 @@ def test_drone_hovers_at_target():
     result = run_hover(sim_seconds=4.0)
     assert result.final_error_m < HOVER_TOLERANCE_M
     assert result.frames_rendered == 120
+
+
+def test_gate_front_markers_are_visual_only_and_untextured():
+    world = World()
+    try:
+        gate = world.load_course(generate_course(1000, load_preset("straight")))[0]
+        apply_style(world.client, world.ground_id, [gate], EVAL_LOOKS["day"].style)
+        for link in FRONT_MARKER_LINK_INDICES:
+            assert p.getCollisionShapeData(gate, link, physicsClientId=world.client) == ()
+        visuals = p.getVisualShapeData(gate, physicsClientId=world.client)
+        marker_colors = {v[1]: v[7] for v in visuals if v[1] in FRONT_MARKER_LINK_INDICES}
+        assert set(marker_colors) == set(FRONT_MARKER_LINK_INDICES)
+        assert all(np.allclose(c, FRONT_MARKER_RGBA, atol=1e-3) for c in marker_colors.values())
+    finally:
+        world.close()

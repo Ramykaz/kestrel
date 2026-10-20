@@ -4,6 +4,9 @@ Gate frame convention: origin at the center of the opening, halfway through the 
 depth. +x is the direction of travel through the gate, so the front face (the side a
 drone approaches from) is at x = -depth / 2. +z is up and +y is to the left when looking
 along +x.
+
+The front face is painted white so a camera can tell front from back. Without it the frame
+looks the same from both sides apart from its 5 cm depth.
 """
 
 from __future__ import annotations
@@ -21,9 +24,14 @@ FRAME_DEPTH_M = 0.05
 POST_WIDTH_M = 0.04
 
 GATE_RGBA = (0.95, 0.45, 0.10, 1.0)
+FRONT_MARKER_RGBA = (0.96, 0.96, 0.93, 1.0)
+# Thin enough that the marked face stays within 2 mm of the frame's front face, which is
+# where the keypoint labels are defined.
+FRONT_MARKER_THICKNESS_M = 0.002
 
 # Link indices follow the order of parts in gate_urdf_text.
 GATE_POST_LINK_INDEX = 4
+FRONT_MARKER_LINK_INDICES = (5, 6, 7, 8)
 
 _URDF_DIR = Path(tempfile.gettempdir()) / "kestrel_urdf"
 
@@ -51,17 +59,24 @@ def outer_box_corners_local(depth: float = FRAME_DEPTH_M) -> np.ndarray:
     )
 
 
-def _box_link_xml(name: str, size: tuple[float, float, float], xyz: tuple[float, ...]) -> str:
+def _box_link_xml(
+    name: str,
+    size: tuple[float, float, float],
+    xyz: tuple[float, ...],
+    rgba: tuple[float, ...] = GATE_RGBA,
+    collides: bool = True,
+) -> str:
     size_str = " ".join(f"{v:.5f}" for v in size)
     xyz_str = " ".join(f"{v:.5f}" for v in xyz)
-    rgba = " ".join(f"{v:.3f}" for v in GATE_RGBA)
+    rgba_str = " ".join(f"{v:.3f}" for v in rgba)
     geometry = f'<geometry><box size="{size_str}"/></geometry>'
-    material = f'<material name="gate"><color rgba="{rgba}"/></material>'
+    material = f'<material name="{name}"><color rgba="{rgba_str}"/></material>'
+    collision = f'<collision><origin xyz="{xyz_str}"/>{geometry}</collision>' if collides else ""
     return f"""
   <link name="{name}">
     <inertial><mass value="0"/><inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/></inertial>
     <visual><origin xyz="{xyz_str}"/>{geometry}{material}</visual>
-    <collision><origin xyz="{xyz_str}"/>{geometry}</collision>
+    {collision}
   </link>"""
 
 
@@ -81,6 +96,17 @@ def gate_urdf_text(center_height: float, depth: float = FRAME_DEPTH_M) -> str:
         ("post", (POST_WIDTH_M, POST_WIDTH_M, post_height), (0.0, 0.0, post_height / 2)),
     ]
     links = "".join(_box_link_xml(name, size, xyz) for name, size, xyz in parts)
+    # Visual-only plates on the front of the four bars; they never collide.
+    marker_x = -depth / 2 - FRONT_MARKER_THICKNESS_M / 2
+    markers = [
+        (f"front_{name}", (FRONT_MARKER_THICKNESS_M, *size[1:]), (marker_x, *xyz[1:]))
+        for name, size, xyz in parts[:4]
+    ]
+    links += "".join(
+        _box_link_xml(name, size, xyz, FRONT_MARKER_RGBA, collides=False)
+        for name, size, xyz in markers
+    )
+    parts += markers
     joints = "".join(
         f"""
   <joint name="base_{name}" type="fixed"><parent link="base"/><child link="{name}"/></joint>"""

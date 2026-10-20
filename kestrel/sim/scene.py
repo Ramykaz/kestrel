@@ -15,6 +15,8 @@ import numpy as np
 import pybullet as p
 from PIL import Image
 
+from kestrel.sim.gates import FRONT_MARKER_LINK_INDICES
+
 GROUND_TEXTURE_PX = 256
 GROUND_TILE_M = 2.0
 GATE_TEXTURE_PX = 64
@@ -178,7 +180,8 @@ def _load_texture(client: int, rgb: np.ndarray) -> int:
 
 
 def apply_style(client: int, ground_id: int, gate_body_ids: list[int], style: SceneStyle) -> None:
-    """Texture the ground and every gate of a loaded course."""
+    """Texture the ground and every gate of a loaded course. The white front markers keep
+    their color."""
     ground = ground_texture(style.ground_pattern, style.ground_colors, style.texture_seed)
     p.changeVisualShape(
         ground_id,
@@ -193,6 +196,8 @@ def apply_style(client: int, ground_id: int, gate_body_ids: list[int], style: Sc
     gate_texture_id = _load_texture(client, gate)
     for body in gate_body_ids:
         for link in range(p.getNumJoints(body, physicsClientId=client)):
+            if link in FRONT_MARKER_LINK_INDICES:
+                continue
             p.changeVisualShape(
                 body,
                 link,
