@@ -1,0 +1,75 @@
+@import "@fontsource/barlow-condensed/latin-500.css";
+@import "@fontsource/barlow-condensed/latin-600.css";
+@import "@fontsource/atkinson-hyperlegible/latin-400.css";
+@import "@fontsource/atkinson-hyperlegible/latin-700.css";
+
+/* Chart by day */
+:root {
+  --paper: #e8ede6;
+  --paper-raised: #f3f6f1;
+  --ink: #1b2a47;
+  --ink-soft: #4f5d78;
+  --route: #a61e6e;
+  --airway: #2c65a8;
+  --terrain: #c9b486;
+  /* #c6362b in the spec measures 4.46:1 on --paper, just under WCAG AA; this is the nearest passing shade. */
+  --alert: #c3352a;
+
+  --rule: color-mix(in srgb, var(--ink-soft) 30%, transparent);
+  --rule-strong: color-mix(in srgb, var(--ink-soft) 55%, transparent);
+  --graticule: color-mix(in srgb, var(--ink) 6%, transparent);
+  --airway-wash: color-mix(in srgb, var(--airway) 12%, transparent);
+  --route-wash: color-mix(in srgb, var(--route) 10%, transparent);
+
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, sans-serif;
+
+  /* 1.25 ratio on a 17 px base: 13.6, 17, 21.3, 26.6, 33.2, 41.5, 51.9 px */
+  --step--1: 0.8rem;
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.5625rem;
+  --step-3: 1.953rem;
+  --step-4: 2.441rem;
+  --step-5: 3.052rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  --radius: 4px;
+  --topbar-h: 3.25rem;
+  --measure: 70ch;
+
+  color-scheme: light;
+}
+
+/* Chart by night */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="day"]) {
+    --paper: #0f1b2d;
+    --paper-raised: #16253b;
+    --ink: #dce4ee;
+    --ink-soft: #93a3ba;
+    --route: #e0569f;
+    --airway: #6ea4e4;
+    --terrain: #6b5e40;
+    --alert: #f06a5e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="night"] {
+  --paper: #0f1b2d;
+  --paper-raised: #16253b;
+  --ink: #dce4ee;
+  --ink-soft: #93a3ba;
+  --route: #e0569f;
+  --airway: #6ea4e4;
+  --terrain: #6b5e40;
+  --alert: #f06a5e;
+  color-scheme: dark;
+}

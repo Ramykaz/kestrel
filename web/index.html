@@ -2,13 +2,48 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Kestrel</title>
-    <meta name="description" content="A camera-only racing drone that a team of AI agents teaches to fly, in simulation." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Kestrel: a camera-only drone taught to race by AI agents</title>
+    <meta
+      name="description"
+      content="A camera-only racing drone that a team of AI agents teaches to fly, in simulation. Scrub through training rounds and watch it go from crashing at gate 1 to clean laps."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      try {
+        var saved = localStorage.getItem("kestrel-theme");
+        if (saved === "day" || saved === "night") document.documentElement.dataset.theme = saved;
+      } catch (e) {}
+    </script>
   </head>
   <body>
-    <h1>Kestrel</h1>
-    <p>A camera-only racing drone that a team of AI agents teaches to fly, in simulation.</p>
-    <p>The site is not built yet. The first training rounds will appear here.</p>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="topbar">
+      <a class="wordmark" href="/flight" data-link>
+        <svg class="wordmark-symbol" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" />
+          <path d="M12 20v4" stroke="currentColor" stroke-width="2.4" />
+        </svg>
+        <span>Kestrel</span>
+      </a>
+      <nav class="nav" aria-label="Views">
+        <a href="/flight" data-link data-view="flight">Flight</a>
+        <a href="/rounds" data-link data-view="rounds">Rounds</a>
+        <a href="/lab" data-link data-view="lab">Detector lab</a>
+        <a href="/crashes" data-link data-view="crashes">Crash review</a>
+        <a href="/notes" data-link data-view="notes">Notes</a>
+      </nav>
+      <div class="theme-toggle" role="group" aria-label="Chart colors">
+        <button type="button" data-theme-choice="day">Day</button>
+        <button type="button" data-theme-choice="night">Night</button>
+      </div>
+    </header>
+    <div class="fixture-banner" hidden></div>
+    <main id="main" tabindex="-1"></main>
+    <noscript>
+      <p class="noscript">This site replays drone flights in the browser and needs JavaScript.</p>
+    </noscript>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
